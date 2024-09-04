@@ -14,7 +14,7 @@ Target journal: ?
 
 1. Introduction:   
    1. Motivation  
-      1. Agricultural lands make up approximately 40% of the total land area in the United States. That is more than forest and urban lands combined. Monitoring ecological activity on agricultural lands is important if we are to obtain a complete picture of national ecological health. We would like to investigate current ecological observation datasets and document any disparity between agricultural observations and non-agricultural observations.  
+      1. Agricultural lands make up approximately 53% of the total land area in the United States. That is more than forest and urban lands combined. Monitoring ecological activity on agricultural lands is important if we are to obtain a complete picture of national ecological health. We would like to investigate current ecological observation datasets and document any disparity between agricultural observations and non-agricultural observations.  
    2. Currently available data products  
       1. Biodiversity Observations  
          1. Global Biodiversity Information Facility \- [https://www.gbif.org](https://www.gbif.org)  
