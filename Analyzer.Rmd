@@ -1,0 +1,334 @@
+---
+title: "Agricultural Ecology Obsservation Disparity Analyzer"
+output:
+  html_document:
+    highlight: pygments
+    theme: cerulean
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+# Instructions
+
+Given a data set of observations, how many were collected on agricultural lands vs non-agricultural lands?
+
+## Create a GBIF Data set
+
+What taxa, time frame, and geography are we interested in?
+
+1.  Visit - <https://www.gbif.org/occurrence/search>
+
+2.  Use the interface to filter down a data set and then press download
+    to create a unique DOI
+
+3.  Compiled data sets and DOI codes are created here:
+    <https://www.gbif.org/user/download>
+
+4.  Download your data set as a CSV.
+
+## Download Land Use Data sets
+
+-   USGS NLCD 2021 - NLCD Land Cover (CONUS) All Years -
+    [https://www.mrlc.gov/data](https://www.google.com/url?q=https%3A%2F%2Fwww.mrlc.gov%2Fdata)
+
+-   USDA NASS CroplandCROS - National Download -
+    [https://www.nass.usda.gov/Research_and_Science/Cropland/Release/index.php](https://www.google.com/url?q=https%3A%2F%2Fwww.nass.usda.gov%2FResearch_and_Science%2FCropland%2FRelease%2Findex.php)
+
+#Setup
+## Set Variables
+
+```{r}
+#GBIF SUBSET
+gbif_dataset_path = 'Datasets/GBIF/GBIF_SLF/slf.csv'
+
+#USGS NLCD 2021
+nlcd_dataset_path = 'Datasets/Land Use/NLCD2021/nlcd_2021_land_cover_l48_20230630/nlcd_2021_land_cover_l48_20230630.img'
+
+#USDA NASS CroplandCROS
+nass_dataset_path = 'Datasets/Land Use/NASS_USA_2023/2023_30m_cdls/2023_30m_cdls.tif'
+```
+
+## Install Required Packages
+
+```{r}
+# Install necessary packages if not already installed
+if(!require(terra)) install.packages("terra")
+if(!require(dplyr)) install.packages("dplyr")
+if(!require(readr)) install.packages("readr")
+if(!require(ggplot2)) install.packages("ggplot2")
+
+# Load the required libraries
+library(terra)
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+## Load and Clean Datasets
+
+```{r}
+# Load USGS NLCD raster dataset
+nlcd_raster <- rast(nlcd_dataset_path)
+
+# Load USDA NASS CroplandCROS raster dataset
+nass_raster <- rast(nass_dataset_path)
+
+# Load GBIF data set as a data frame
+gbif_data <- read_csv(gbif_dataset_path)
+
+# Check if both raster datasets have the same CRS
+if (crs(nlcd_raster) == crs(nass_raster)) {
+  cat("The CRS of both rasters are the same.\n")
+} else {
+  cat("The CRS of the rasters are different.\n")
+  cat("NLCD CRS:", crs(nlcd_raster), "\n")
+  cat("NASS CRS:", crs(nass_raster), "\n")
+}
+
+# Plot the rasters to visualize
+plot(nlcd_raster, main = "USGS NLCD 2021")
+plot(nass_raster, main = "USDA NASS CroplandCROS")
+```
+
+## Clean and Prepare GBIF Dataset
+```{r}
+# Load GBIF dataset
+gbif_data <- read_csv(gbif_dataset_path)
+
+# Filter out rows with missing or invalid longitude/latitude
+gbif_data <- gbif_data %>%
+  filter(!is.na(decimalLongitude) & !is.na(decimalLatitude)) %>%
+  filter(decimalLongitude >= -180 & decimalLongitude <= 180,
+         decimalLatitude >= -90 & decimalLatitude <= 90)
+
+# Convert GBIF data points to SpatVector using WGS 84 CRS (assuming GBIF uses WGS 84)
+coordinates <- vect(gbif_data, geom = c("decimalLongitude", "decimalLatitude"), crs = "EPSG:4326")
+# Project GBIF points to match the CRS of the NLCD raster
+coordinates_nlcd <- project(coordinates, crs(nlcd_raster))
+# Project GBIF points to match the CRS of the NASS raster
+coordinates_nass <- project(coordinates, crs(nass_raster))
+```
+
+# Analysis
+
+## Analyze Observations Against Land Use
+```{r}
+# Extract values from the NLCD raster at the reprojected GBIF points
+gbif_data$nlcd_value <- extract(nlcd_raster, coordinates_nlcd)[, 2]
+
+# Extract values from the NASS raster at the reprojected GBIF points
+gbif_data$nass_value <- extract(nass_raster, coordinates_nass)[, 2]
+```
+
+
+```{r}
+# Show all possible values for each column
+# List all unique values in the nlcd_value column
+unique_nlcd_values <- unique(gbif_data$nlcd_value)
+print(unique_nlcd_values)
+
+# List all unique values in the nass_value column
+unique_nass_values <- unique(gbif_data$nass_value)
+print(unique_nass_values)
+
+# Define land use codes for NLCD and NASS datasets
+# Manually define numeric codes for NLCD labels
+nlcd_land_use_codes <- c(
+  "Deciduous Forest"            = 0,
+  "Evergreen Forest"            = 0,
+  "Mixed Forest"                = 0,
+  "Developed, Low Intensity"    = 0,
+  "Developed, Medium Intensity" = 0,
+  "Developed, High Intensity"   = 0,
+  "Developed, Open Space"       = 0,
+  "Open Water"                  = 0,
+  "Woody Wetlands"              = 0,
+  "Emergent Herbaceous Wetlands" = 0,
+  "Cultivated Crops"            = 1,
+  "Hay/Pasture"                 = 1,
+  "Shrub/Scrub"                 = 0,
+  "Barren Land"                 = 0,
+  "Herbaceous"                  = 0,
+  "Unclassified"                = 0  # Assuming 0 for unclassified
+)
+
+# Manually define numeric codes for NASS labels
+# Expanded NASS Land Use Codes
+nass_land_use_codes <- c(
+  "Deciduous Forest"          = 0,   # Non-agricultural
+  "Woody Wetlands"            = 0,   # Non-agricultural
+  "Developed/High Intensity"  = 0,   # Non-agricultural
+  "Developed/Med Intensity"   = 0,   # Non-agricultural
+  "Developed/Open Space"      = 0,   # Non-agricultural
+  "Corn"                      = 1,   # Agricultural
+  "Developed/Low Intensity"   = 0,   # Non-agricultural
+  "Mixed Forest"              = 0,   # Non-agricultural
+  "Background"                = 0,   # Non-agricultural (assumed background noise)
+  "Herbaceous Wetlands"       = 0,   # Non-agricultural
+  "Other Hay/Non Alfalfa"     = 1,   # Agricultural
+  "Grassland/Pasture"         = 1,   # Agricultural
+  "Open Water"                = 0,   # Non-agricultural
+  "Barren"                    = 0,   # Non-agricultural
+  "Soybeans"                  = 1,   # Agricultural
+  "Apples"                    = 1,   # Agricultural
+  "Evergreen Forest"          = 0,   # Non-agricultural
+  "Shrubland"                 = 0,   # Non-agricultural
+  "Dbl Crop WinWht/Corn"      = 1,   # Agricultural
+  "Fallow/Idle Cropland"      = 1,   # Agricultural
+  "Alfalfa"                   = 1,   # Agricultural
+  "Dbl Crop Triticale/Corn"   = 1,   # Agricultural
+  "Dbl Crop WinWht/Soybeans"  = 1,  # Agricultural
+  "Blueberries"               = 1,  # Agricultural
+  "Oats"                      = 1,  # Agricultural
+  "Tomatoes"                  = 1,  # Agricultural
+  "Christmas Trees"           = 1,  # Agricultural (assuming a crop)
+  "Sod/Grass Seed"            = 1,  # Agricultural
+  "Winter Wheat"              = 1,  # Agricultural
+  "Sorghum"                   = 1,  # Agricultural
+  "Dbl Crop Barley/Corn"      = 1,  # Agricultural
+  "Canola"                    = 1,  # Agricultural
+  "Rye"                       = 1   # Agricultural
+)
+
+# Apply the numeric mapping to the dataset
+gbif_data <- gbif_data %>%
+  mutate(
+    nlcd_numeric = recode(nlcd_value, !!!nlcd_land_use_codes, .default = NA_real_),  # Use NA for unmatched values
+    nass_numeric = recode(nass_value, !!!nass_land_use_codes, .default = NA_real_)   # Use NA for unmatched values
+  )
+
+# Reclassify observations as Agricultural (1) or Non-Agricultural (0)
+gbif_data <- gbif_data %>%
+  mutate(
+    ag_classification = case_when(
+      nlcd_numeric == 1 ~ "Agricultural",          # NLCD Agricultural classification
+      nass_numeric %in% 1 ~ "Agricultural",     # NASS Agricultural classifications (assuming 1:19 are crops)
+      TRUE ~ "Non-Agricultural"                    # Everything else
+    )
+  )
+
+# Classify agreement/disagreement between NLCD and NASS
+gbif_data <- gbif_data %>%
+  mutate(
+    ag_disagreement = case_when(
+      nlcd_numeric == 1 & nass_numeric == 1 ~ "Agree - Agricultural",  # Both agree it's agricultural
+      nlcd_numeric == 0 & nass_numeric == 0 ~ "Agree - Non-Agricultural",  # Both agree it's non-agricultural
+      nlcd_numeric == 1 & nass_numeric == 0 ~ "Disagree - NLCD Agricultural, NASS Non-Agricultural",  # NLCD says agricultural, NASS says non-agricultural
+      nlcd_numeric == 0 & nass_numeric == 1 ~ "Disagree - NLCD Non-Agricultural, NASS Agricultural",  # NLCD says non-agricultural, NASS says agricultural
+      TRUE ~ "Unclassified"  # Handle any remaining cases
+    )
+  )
+```
+## Look at where the datasets agree and disagree
+```{r}
+# Calculate the proportions of agreement/disagreement observations
+ag_disagreement_proportions <- gbif_data %>%
+  group_by(ag_disagreement) %>%
+  summarise(count = n()) %>%
+  mutate(proportion = count / sum(count))
+
+# Print proportions to verify
+print(ag_disagreement_proportions)
+# Create a pie chart for agreement/disagreement between NLCD and NASS
+ggplot(ag_disagreement_proportions, aes(x = "", y = proportion, fill = ag_disagreement)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) +
+  labs(title = "Agreement/Disagreement between NLCD and NASS on Land Use Classification") +
+  theme_void() +
+  scale_fill_manual(values = c(
+    "Agree - Agricultural" = "#66c2a5", 
+    "Agree - Non-Agricultural" = "#fc8d62",
+    "Disagree - NLCD Agricultural, NASS Non-Agricultural" = "#8da0cb", 
+    "Disagree - NLCD Non-Agricultural, NASS Agricultural" = "#e78ac3",
+    "Unclassified" = "#a6d854"  # Optional color for unclassified cases
+  ))
+```
+
+
+## Calculate proportions of ag vs non ag
+```{r}
+# Calculate the proportions of agricultural vs non-agricultural observations
+ag_proportions <- gbif_data %>%
+  group_by(ag_classification) %>%
+  summarise(count = n()) %>%
+  mutate(proportion = count / sum(count))
+
+# Print proportions to verify
+print(ag_proportions)
+```
+
+
+# Visualizations
+
+## Agreed ag vs non-ag
+
+```{r}
+# Filter for observations where NLCD and NASS agree on agricultural vs non-agricultural
+agreed_data <- gbif_data %>%
+  filter(
+    (nlcd_numeric == 1 & nass_numeric == 1) |  # Both agree it's agricultural
+    (nlcd_numeric == 0 & nass_numeric == 0)    # Both agree it's non-agricultural
+  ) %>%
+  mutate(
+    agreed_classification = ifelse(nlcd_numeric == 1, "Agricultural", "Non-Agricultural")
+  )
+
+# Calculate the proportions of agreed upon agricultural vs non-agricultural observations
+agreed_proportions <- agreed_data %>%
+  group_by(agreed_classification) %>%
+  summarise(count = n()) %>%
+  mutate(
+    proportion = count / sum(count),
+    percentage_label = paste0(round(proportion * 100, 1), "%")  # Create percentage labels
+  )
+
+# Print proportions to verify
+print(agreed_proportions)
+
+# Create a pie chart for agreed agricultural vs non-agricultural observations with labels
+ggplot(agreed_proportions, aes(x = "", y = proportion, fill = agreed_classification)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = percentage_label), 
+            position = position_stack(vjust = 0.5),  # Position labels in the middle of each slice
+            color = "white", size = 5) +  # Adjust text size and color as needed
+  labs(title = "Proportion of Agreed Agricultural vs Non-Agricultural Observations") +
+  theme_void() +
+  scale_fill_manual(values = c("Agricultural" = "#66c2a5", "Non-Agricultural" = "#fc8d62")) # Optional color scheme
+```
+
+## Agricultural observations by crop type
+```{r}
+# Filter for observations classified as agricultural based on NASS
+agricultural_observations <- gbif_data %>%
+  filter(nass_numeric > 0)  # Keep only agricultural observations
+
+# Count the number of observations for each NASS value
+nass_counts <- agricultural_observations %>%
+  group_by(nass_value) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))  # Sort by count
+
+# Print counts to verify
+print(nass_counts)
+
+# Create a bar plot for the number of agricultural observations by NASS value
+ggplot(nass_counts, aes(x = reorder(nass_value, count), y = count, fill = as.factor(nass_value))) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Number of Agricultural Observations by NASS Value",
+    x = "NASS Value",
+    y = "Number of Observations"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # Rotate x-axis labels for readability
+  scale_fill_discrete(name = "NASS Value")  # Include legend for NASS values
+```
+
+
+
+
+
+
+
