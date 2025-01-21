@@ -1,0 +1,206 @@
+---
+title: "GBIF_Biodiversty"
+author: "Nicholas Gunner"
+date: "2025-01-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Richness
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(viridis)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Convert FIPS in data_filtered to character to match the GeoJSON
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Perform the join
+ny_counties_data <- ny_counties_geo %>%
+  left_join(data_filtered, by = "FIPS")
+
+# Plot the choropleth map
+ggplot(ny_counties_data) +
+  geom_sf(aes(fill = X2023_GBIF_Observation_Species_Richness), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "plasma", name = "GBIF Species Richness (2023)") +
+  theme_minimal() +
+  labs(title = "GBIF Species Richness (2023)",
+       caption = "Data Source: GBIF 2023",
+       fill = "Richness") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "right"
+  )
+```
+
+```{r}
+# Bar plot assigned to a variable
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -X2023_GBIF_Observation_Species_Richness), 
+                                      y = X2023_GBIF_Observation_Species_Richness)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "GBIF Species Richness (2023)",
+       x = "County", y = "Richness",
+       caption = "Data Source: GBIF 2023") +
+  theme(
+    axis.text.y = element_text(size = 10)  # Increase text size for readability
+  )
+
+# Display the plot
+print(bar_plot)
+
+# Save the plot
+ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+```
+
+```{r}
+install.packages("psych")
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(psych)  # For descriptive statistics
+
+# Read the dataset
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+
+# Filter the data
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+
+# Assign variables for analysis
+species_richness <- data_filtered$X2023_GBIF_Observation_Species_Richness
+percent_ag <- data_filtered$Sum_Percent_Land_Use_Agricultural
+proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
+proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+
+# ---------------------------------
+# 4. Scatterplots with Trendlines
+# ---------------------------------
+cat("\nGenerating Scatterplots...\n")
+
+# Scatterplot 1: median_household_income vs GBIF Disparity
+ggplot(data_filtered, aes(x = percent_ag, y = species_richness)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(title = "Percentage Agricultural Lands vs Species Richness",
+       x = "% Agricultural Land",
+       y = "Richness")
+
+# ---------------------------------
+# 5. Regression Analysis (Optional)
+# ---------------------------------
+cat("\nRunning Regression Models...\n")
+
+# Regression 1
+model1 <- lm(species_richness ~ percent_ag, data = data_filtered)
+summary_model1 <- summary(model1)
+print(summary_model1)
+```
+
+# Shannon Index
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(viridis)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Convert FIPS in data_filtered to character to match the GeoJSON
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Perform the join
+ny_counties_data <- ny_counties_geo %>%
+  left_join(data_filtered, by = "FIPS")
+
+# Plot the choropleth map
+ggplot(ny_counties_data) +
+  geom_sf(aes(fill = X2023_GBIF_Observation_Shannon_Index), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "plasma", name = "GBIF Shannon Index (2023)") +
+  theme_minimal() +
+  labs(title = "GBIF Shannon Index (2023)",
+       caption = "Data Source: GBIF 2023",
+       fill = "Shannon Index") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "right"
+  )
+```
+
+```{r}
+# Bar plot assigned to a variable
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -X2023_GBIF_Observation_Shannon_Index), 
+                                      y = X2023_GBIF_Observation_Shannon_Index)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "GBIF Shannon Index (2023)",
+       x = "County", y = "Shannon Index",
+       caption = "Data Source: GBIF 2023") +
+  theme(
+    axis.text.y = element_text(size = 10)  # Increase text size for readability
+  )
+
+# Display the plot
+print(bar_plot)
+
+# Save the plot
+ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+```
+
+```{r}
+install.packages("psych")
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(psych)  # For descriptive statistics
+
+# Read the dataset
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+
+# Filter the data
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+
+# Assign variables for analysis
+shannon_index <- data_filtered$X2023_GBIF_Observation_Shannon_Index
+percent_ag <- data_filtered$Sum_Percent_Land_Use_Agricultural
+
+# ---------------------------------
+# 4. Scatterplots with Trendlines
+# ---------------------------------
+cat("\nGenerating Scatterplots...\n")
+
+# Scatterplot 1: median_household_income vs GBIF Disparity
+ggplot(data_filtered, aes(x = percent_ag, y = shannon_index)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(title = "Percentage Agricultural Lands vs Shannon Index",
+       x = "% Agricultural Land",
+       y = "Shannon Index")
+
+# ---------------------------------
+# 5. Regression Analysis (Optional)
+# ---------------------------------
+cat("\nRunning Regression Models...\n")
+
+# Regression 1
+model1 <- lm(shannon_index ~ percent_ag, data = data_filtered)
+summary_model1 <- summary(model1)
+print(summary_model1)
+```

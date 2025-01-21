@@ -1,0 +1,281 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Load Dataset
+
+```{r}
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+```
+
+# The percentage of observations made on agricultural lands
+
+## Choropleth Map
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(viridis)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Convert FIPS in data_filtered to character to match the GeoJSON
+data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Perform the join
+ny_counties_data <- ny_counties_geo %>%
+  left_join(data_filtered, by = "FIPS")
+
+# Plot the choropleth map
+ggplot(ny_counties_data) +
+  geom_sf(aes(fill = Sum_Percent_GBIF_Observations_Agricultural), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "plasma", name = "Percent in Ag Land") +
+  theme_minimal() +
+  labs(title = "GBIF Observations in Agricultural Land (2023)",
+       caption = "Data Source: GBIF 2023",
+       fill = "Agricultural %") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "right"
+  )
+```
+
+## Bar Plot
+
+```{r}
+# Bar plot assigned to a variable
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -Sum_Percent_GBIF_Observations_Agricultural), 
+                                      y = Sum_Percent_GBIF_Observations_Agricultural)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "GBIF Observations in Agricultural Land by NY County (2023)",
+       x = "County", y = "Percentage of Observations",
+       caption = "Data Source: GBIF 2023") +
+  theme(
+    axis.text.y = element_text(size = 10)  # Increase text size for readability
+  )
+
+# Display the plot
+print(bar_plot)
+
+# Save the plot
+ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+```
+
+## Boxplot
+
+```{r}
+# Box plot
+ggplot(data_filtered, aes(y = Sum_Percent_GBIF_Observations_Agricultural)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  theme_minimal() +
+  labs(title = "Distribution of GBIF Agricultural Observations by County (2023)",
+       y = "Percentage of Observations",
+       caption = "Data Source: GBIF 2023")
+```
+
+## Histogram
+
+```{r}
+# Histogram
+ggplot(data_filtered, aes(x = Sum_Percent_GBIF_Observations_Agricultural)) +
+  geom_histogram(binwidth = .1, fill = "orange", color = "black") +  # Smaller binwidth
+  theme_minimal() +
+  labs(title = "Histogram of GBIF Observations in Agricultural Land (2023)",
+       x = "Percentage of Observations",
+       y = "Count of Counties",
+       caption = "Data Source: GBIF 2023")
+```
+
+## Scatterplot
+
+```{r}
+# Scatter plot
+ggplot(data_filtered, aes(x = X2023_GBIF_Observation_Count, y = Sum_Percent_GBIF_Observations_Agricultural)) +
+  geom_point(color = "purple", size = 3, alpha = 0.7) +
+  theme_minimal() +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Scatter Plot: Agricultural Observation Percentage vs Total Observations",
+       x = "Total GBIF Observations in County",
+       y = "Percentage of Observations in Agricultural Land",
+       caption = "Data Source: GBIF 2023")
+```
+
+# GBIF Agricultural Disparity (Total Percent GBIF Observations on Agricultural Lands / Total Percent of Agricultural Land)
+
+## Choropleth Map
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(viridis)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Convert FIPS in data_filtered to character to match the GeoJSON
+data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Perform the join
+ny_counties_data <- ny_counties_geo %>%
+  left_join(data_filtered, by = "FIPS")
+
+# Plot the choropleth map
+ggplot(ny_counties_data) +
+  geom_sf(aes(fill = GBIF_Agricultural_Disparity), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "plasma", name = "% Ag Obs / % Ag Total") +
+  theme_minimal() +
+  labs(title = "GBIF Agricultural Disparity",
+       caption = "Data Source: GBIF 2023",
+       fill = "Agricultural %") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "right"
+  )
+```
+
+## Bar Plot
+
+```{r}
+# Bar plot assigned to a variable
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -GBIF_Agricultural_Disparity), 
+                                      y = GBIF_Agricultural_Disparity)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "GBIF Agricultural Disparity",
+       x = "County", y = "% Ag Obs / % Ag Total",
+       caption = "Data Source: GBIF 2023, NLCD") +
+  theme(
+    axis.text.y = element_text(size = 10)  # Increase text size for readability
+  )
+
+# Display the plot
+print(bar_plot)
+
+# Save the plot
+ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+```
+
+## Box Plot
+
+```{r}
+# Box plot
+ggplot(data_filtered, aes(y = GBIF_Agricultural_Disparity)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  theme_minimal() +
+  labs(title = "Distribution of GBIF Agricultural Disparity",
+       y = "% Ag Obs / % Ag Total",
+       caption = "Data Source: GBIF 2023")
+```
+
+## Histogram
+
+```{r}
+# Histogram
+ggplot(data_filtered, aes(x = GBIF_Agricultural_Disparity)) +
+  geom_histogram(binwidth = 0.25, fill = "orange", color = "black") +  # Smaller binwidth
+  theme_minimal() +
+  labs(title = "Histogram of GBIF Agricultural Disparity",
+       x = "% Ag Obs / % Ag Total",
+       y = "Count of Counties",
+       caption = "Data Source: GBIF 2023")
+```
+
+# Percentage of Agricultural Lands not within 1km of GBIF Observations
+
+## Choropleth Map
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(viridis)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Convert FIPS in data_filtered to character to match the GeoJSON
+data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Perform the join
+ny_counties_data <- ny_counties_geo %>%
+  left_join(data_filtered, by = "FIPS")
+
+# Plot the choropleth map
+ggplot(ny_counties_data) +
+  geom_sf(aes(fill = Percent_Agricultural_Land_Near_GBIF), color = "black", size = 0.2) +
+  scale_fill_viridis_c(option = "plasma", name = "% Ag > 1km from Obs.") +
+  theme_minimal() +
+  labs(title = "GBIF Coverage",
+       caption = "Data Source: GBIF 2023",
+       fill = "Agricultural %") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "right"
+  )
+```
+
+## Bar Plot
+
+```{r}
+# Bar plot assigned to a variable
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -Percent_Agricultural_Land_Near_GBIF), 
+                                      y = Percent_Agricultural_Land_Near_GBIF)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Neglected GBIF Coverage",
+       x = "County", y = "Ag Land > 1km GBIF",
+       caption = "Data Source: GBIF 2023, NLCD") +
+  theme(
+    axis.text.y = element_text(size = 10)  # Increase text size for readability
+  )
+
+# Display the plot
+print(bar_plot)
+
+# Save the plot
+ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+```
+
+## Box Plot
+
+```{r}
+# Box plot
+ggplot(data_filtered, aes(y = Percent_Agricultural_Land_Near_GBIF)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  theme_minimal() +
+  labs(title = "Neglected GBIF Coverage",
+       y = "Ag Land > 1km GBIF",
+       caption = "Data Source: GBIF 2023")
+```
+
+## Histogram
+
+```{r}
+# Histogram
+ggplot(data_filtered, aes(x = Percent_Agricultural_Land_Near_GBIF)) +
+  geom_histogram(binwidth = .1, fill = "orange", color = "black") +  # Smaller binwidth
+  theme_minimal() +
+  labs(title = "Histogram of Neglected GBIF Coverage",
+       x = "Ag Land > 1km GBIF",
+       y = "Count of Counties",
+       caption = "Data Source: GBIF 2023")
+```
