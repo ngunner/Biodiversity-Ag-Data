@@ -1,0 +1,157 @@
+/* Add your styles here */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.timeline-control {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    width: 80%;
+    max-width: 600px;
+}
+
+.timeline-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+input[type="range"] {
+    width: 100%;
+    margin: 10px 0;
+}
+
+.play-button {
+    display: block;
+    margin: 10px auto 0;
+    padding: 5px 15px;
+    border: none;
+    border-radius: 4px;
+    background: #0066cc;
+    color: white;
+    cursor: pointer;
+}
+
+.play-button:hover {
+    background: #0052a3;
+}
+
+.date-selectors {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.date-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.date-input label {
+    font-size: 14px;
+    color: #333;
+}
+
+.date-input input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.current-date {
+    font-size: 16px;
+    font-weight: bold;
+    color: #0066cc;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 5px 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.parameters-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    width: 300px;
+}
+
+.parameters-panel h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+}
+
+.parameter-group {
+    margin-bottom: 25px;
+}
+
+.parameter-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #666;
+}
+
+.parameter-group input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+}
+
+.parameter-value {
+    float: right;
+    font-size: 14px;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+.reset-button {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    margin-top: 15px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.reset-button:hover {
+    background: #c82333;
+}
+
+.statistics {
+    background: #f8f9fa;
+    padding: 15px;
+    margin: 25px 0;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.statistics p {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #333;
+}

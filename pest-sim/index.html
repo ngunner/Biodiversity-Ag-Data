@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Vue Map App</title>
+    <!-- Add Vue.js from CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Add MapLibre GL JS -->
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <script src='https://unpkg.com/@turf/turf@6/dist/turf.min.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+    <!-- Add your CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="map"></div>
+        <div class="parameters-panel">
+            <h3>Observation Parameters</h3>
+            <div class="parameter-group">
+                <label>Observation Density (obs/100km²/month)</label>
+                <input 
+                    type="range" 
+                    v-model="observationDensity" 
+                    min="0" 
+                    max="10"
+                    step="1"
+                    @mousedown="handleSliderStart"
+                    @touchstart="handleSliderStart"
+                    @mouseup="handleSliderEnd"
+                    @touchend="handleSliderEnd"
+                    @input="updateParameters"
+                >
+                <span class="parameter-value">{{ observationDensity }}</span>
+            </div>
+            <div class="parameter-group">
+                <label>Taxonomical Likelihood (%)</label>
+                <input 
+                    type="range" 
+                    v-model="taxonomicalLikelihood" 
+                    min="0" 
+                    max="100"
+                    @mousedown="handleSliderStart"
+                    @touchstart="handleSliderStart"
+                    @mouseup="handleSliderEnd"
+                    @touchend="handleSliderEnd"
+                    @input="updateParameters"
+                >
+                <span class="parameter-value">{{ taxonomicalLikelihood }}%</span>
+            </div>
+            <div class="statistics">
+                <p>Total Observations: {{ totalObservationCount }}</p>
+                <p>Successful Detections: {{ detectedPoints.size }}</p>
+                <p>Detection Rate: {{ detectionRate }}%</p>
+            </div>
+            <button @click="resetSimulation" class="reset-button">Reset Simulation</button>
+        </div>
+        <div class="timeline-control">
+            <div class="date-selectors">
+                <div class="date-input">
+                    <label>Start:</label>
+                    <input 
+                        type="date" 
+                        v-model="startDateInput"
+                        @change="updateDateRange"
+                    >
+                </div>
+                <div class="current-date">
+                    {{ formatDate(new Date(Number(currentTime))) }}
+                </div>
+                <div class="date-input">
+                    <label>End:</label>
+                    <input 
+                        type="date" 
+                        v-model="endDateInput"
+                        @change="updateDateRange"
+                    >
+                </div>
+            </div>
+            <div class="timeline-labels">
+                <span>{{ formatDate(startDate) }}</span>
+                <span>{{ formatDate(endDate) }}</span>
+            </div>
+            <input 
+                type="range" 
+                v-model="currentTime" 
+                :min="startDate.getTime()" 
+                :max="endDate.getTime()" 
+                :step="86400000"
+                @input="updateProgress"
+            >
+            <button @click="toggleAnimation" class="play-button">
+                {{ isPlaying ? 'Pause' : 'Play' }}
+            </button>
+        </div>
+    </div>
+    <script src="js/app.js"></script>
+</body>
+</html>
