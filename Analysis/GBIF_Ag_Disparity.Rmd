@@ -21,12 +21,14 @@ library(ggplot2)
 library(sf)
 library(dplyr)
 library(viridis)
+library(leaflet)
+library(leaflet.extras)
 
 # Read the GeoJSON file
 ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
 
 # Convert FIPS in data_filtered to character to match the GeoJSON
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 data_filtered$FIPS <- as.character(data_filtered$FIPS)
 
@@ -37,15 +39,58 @@ ny_counties_data <- ny_counties_geo %>%
 # Plot the choropleth map
 ggplot(ny_counties_data) +
   geom_sf(aes(fill = Sum_Percent_GBIF_Observations_Agricultural), color = "black", size = 0.2) +
-  scale_fill_viridis_c(option = "plasma", name = "Percent in Ag Land") +
+  scale_fill_viridis_c(option = "plasma", name = "Percent on Ag Land") +
   theme_minimal() +
-  labs(title = "GBIF Observations in Agricultural Land (2023)",
-       caption = "Data Source: GBIF 2023",
+  labs(title = "GBIF Observations on Agricultural Land (2023)",
+       caption = "Figure X. Percentage of GBIF occurrence observations taken on agricultural lands\nby county in New York State. Data sources: Global Biodiversity Information Facility (GBIF, 2024),\nNational Land Cover Database (NLCD, 2023), and National Weather Service (NWS, 2024).",
        fill = "Agricultural %") +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
-    legend.position = "right"
+    plot.caption = element_text(size = 8, hjust = 0),  # Adjust font size and alignment of the caption
+    legend.position = "right",
+    plot.margin = margin(10, 10, 10, 10)  # Add margins around the plot
   )
+
+# Interactive Map with Leaflet
+# Transform to WGS84 (needed for Leaflet)
+ny_counties_data <- st_transform(ny_counties_data, crs = 4326)
+
+# Create a color palette
+pal <- colorNumeric(
+  palette = "plasma",
+  domain = ny_counties_data$Sum_Percent_GBIF_Observations_Agricultural,
+  na.color = "transparent"
+)
+
+# Create the interactive map
+leaflet(ny_counties_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(Sum_Percent_GBIF_Observations_Agricultural),
+    weight = 1,
+    opacity = 1,
+    color = "black",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    label = ~paste(
+      "County:", COUNTYNAME.x, "-",
+      "Percent Ag Land Observations:", Sum_Percent_GBIF_Observations_Agricultural, "%"
+    )
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = ~Sum_Percent_GBIF_Observations_Agricultural,
+    title = "Percent on Ag Land",
+    opacity = 1
+  ) %>%
+  addFullscreenControl()
 ```
 
 ## Bar Plot
@@ -59,7 +104,7 @@ bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -Sum_Percent_GBIF_
   theme_minimal() +
   labs(title = "GBIF Observations in Agricultural Land by NY County (2023)",
        x = "County", y = "Percentage of Observations",
-       caption = "Data Source: GBIF 2023") +
+       caption = "") +
   theme(
     axis.text.y = element_text(size = 10)  # Increase text size for readability
   )
@@ -74,13 +119,19 @@ ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi 
 ## Boxplot
 
 ```{r}
-# Box plot
 ggplot(data_filtered, aes(y = Sum_Percent_GBIF_Observations_Agricultural)) +
   geom_boxplot(fill = "lightblue", color = "darkblue") +
   theme_minimal() +
-  labs(title = "Distribution of GBIF Agricultural Observations by County (2023)",
-       y = "Percentage of Observations",
-       caption = "Data Source: GBIF 2023")
+  labs(
+    title = "Distribution of GBIF Agricultural Observations by County (2023)",
+    y = "Percentage of Observations on Agricultural Lands",
+    caption = ""
+  ) +
+  theme(
+    axis.title.x = element_blank(),  # Remove x-axis label
+    axis.text.x = element_blank(),   # Remove x-axis tick labels
+    axis.ticks.x = element_blank()   # Remove x-axis ticks
+  )
 ```
 
 ## Histogram
@@ -90,7 +141,7 @@ ggplot(data_filtered, aes(y = Sum_Percent_GBIF_Observations_Agricultural)) +
 ggplot(data_filtered, aes(x = Sum_Percent_GBIF_Observations_Agricultural)) +
   geom_histogram(binwidth = .1, fill = "orange", color = "black") +  # Smaller binwidth
   theme_minimal() +
-  labs(title = "Histogram of GBIF Observations in Agricultural Land (2023)",
+  labs(title = "Histogram of GBIF Observations on Agricultural Land (2023)",
        x = "Percentage of Observations",
        y = "Count of Counties",
        caption = "Data Source: GBIF 2023")
@@ -105,12 +156,13 @@ ggplot(data_filtered, aes(x = X2023_GBIF_Observation_Count, y = Sum_Percent_GBIF
   theme_minimal() +
   geom_smooth(method = "lm", color = "red", se = FALSE) +
   labs(title = "Scatter Plot: Agricultural Observation Percentage vs Total Observations",
-       x = "Total GBIF Observations in County",
+       x = "Total GBIF Observations by County",
        y = "Percentage of Observations in Agricultural Land",
        caption = "Data Source: GBIF 2023")
 ```
 
-# GBIF Agricultural Disparity (Total Percent GBIF Observations on Agricultural Lands / Total Percent of Agricultural Land)
+# Observational Disparity
+(Total Percent GBIF Observations on Agricultural Lands / Total Percent of Agricultural Land)
 
 ## Choropleth Map
 
@@ -120,47 +172,132 @@ library(ggplot2)
 library(sf)
 library(dplyr)
 library(viridis)
+library(leaflet)
+library(leaflet.extras)
+library(ggrepel)  # For better label placement
 
 # Read the GeoJSON file
 ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
 
-# Convert FIPS in data_filtered to character to match the GeoJSON
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+# Read and filter the CSV file
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 data_filtered$FIPS <- as.character(data_filtered$FIPS)
 
-# Perform the join
+# Join spatial and observational data
 ny_counties_data <- ny_counties_geo %>%
   left_join(data_filtered, by = "FIPS")
 
-# Plot the choropleth map
+# Filter counties where GBIF_Agricultural_Disparity is greater than 1
+labeled_counties <- ny_counties_data %>%
+  filter(GBIF_Agricultural_Disparity > 1) %>%
+  mutate(centroid = st_centroid(geometry)) %>%
+  mutate(x = st_coordinates(centroid)[,1], 
+         y = st_coordinates(centroid)[,2])
+
+# ---- STATIC MAP ----
 ggplot(ny_counties_data) +
   geom_sf(aes(fill = GBIF_Agricultural_Disparity), color = "black", size = 0.2) +
-  scale_fill_viridis_c(option = "plasma", name = "% Ag Obs / % Ag Total") +
+
+  # Label only counties with greater than 1 disparity
+  geom_label_repel(data = labeled_counties, 
+                   aes(x = x, y = y, label = COUNTYNAME.x), 
+                   size = 4, fontface = "bold", 
+                   fill = "white", color = "black",
+                   box.padding = 0.5, point.padding = 0.3, segment.color = "white") + 
+  
+  scale_fill_viridis_c(option = "plasma", name = "") +
   theme_minimal() +
-  labs(title = "GBIF Agricultural Disparity",
-       caption = "Data Source: GBIF 2023",
-       fill = "Agricultural %") +
+  labs(title = "",
+       caption = "",
+       fill = "",
+       x = NULL,  # Removes x-axis label
+       y = NULL) +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
     legend.position = "right"
+  )
+
+# ---- INTERACTIVE MAP ----
+# Transform to WGS84 (needed for Leaflet)
+ny_counties_data <- st_transform(ny_counties_data, crs = 4326)
+labeled_counties <- st_transform(labeled_counties, crs = 4326)
+
+# Create a color palette
+pal <- colorNumeric(
+  palette = "plasma",
+  domain = ny_counties_data$GBIF_Agricultural_Disparity,
+  na.color = "transparent"
+)
+
+# Create the interactive map with labeled counties
+leaflet(ny_counties_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(GBIF_Agricultural_Disparity),
+    weight = 1,
+    opacity = 1,
+    color = "black",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    label = ~paste(
+      "County:", COUNTYNAME.x, "<br>",
+      "Observational Disparity:", round(GBIF_Agricultural_Disparity, 2)
+    ),
+    labelOptions = labelOptions(
+      style = list("font-size" = "12px", "background" = "white", "padding" = "5px")
+    )
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = ~GBIF_Agricultural_Disparity,
+    title = "Observational Disparity",
+    opacity = 1
+  ) %>%
+  addFullscreenControl() %>%
+  addLabelOnlyMarkers(
+    data = labeled_counties,
+    lng = ~x, lat = ~y,
+    label = ~COUNTYNAME.x,
+    labelOptions = labelOptions(
+      noHide = TRUE,
+      direction = "top",
+      textOnly = TRUE,
+      style = list(
+        "color" = "black",
+        "font-weight" = "bold",
+        "background" = "white",
+        "border" = "2px solid black",
+        "padding" = "5px",
+        "border-radius" = "5px"
+      )
+    )
   )
 ```
 
 ## Bar Plot
 
 ```{r}
-# Bar plot assigned to a variable
 bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -GBIF_Agricultural_Disparity), 
-                                      y = GBIF_Agricultural_Disparity)) +
-  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+                                      y = GBIF_Agricultural_Disparity, 
+                                      fill = GBIF_Agricultural_Disparity < 1)) + 
+  geom_bar(stat = "identity", width = 0.7) +  
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "steelblue")) +  # Assign colors
   coord_flip() +
   theme_minimal() +
-  labs(title = "GBIF Agricultural Disparity",
-       x = "County", y = "% Ag Obs / % Ag Total",
-       caption = "Data Source: GBIF 2023, NLCD") +
+  labs(title = "",
+       x = "", y = "",
+       caption = "") +
   theme(
-    axis.text.y = element_text(size = 10)  # Increase text size for readability
+    axis.text.y = element_text(size = 10),  # Increase text size for readability
+    legend.position = "none"  # Remove legend if not needed
   )
 
 # Display the plot
@@ -195,7 +332,7 @@ ggplot(data_filtered, aes(x = GBIF_Agricultural_Disparity)) +
        caption = "Data Source: GBIF 2023")
 ```
 
-# Percentage of Agricultural Lands not within 1km of GBIF Observations
+# Observational Coverage
 
 ## Choropleth Map
 
@@ -205,54 +342,184 @@ library(ggplot2)
 library(sf)
 library(dplyr)
 library(viridis)
+library(leaflet)
+library(leaflet.extras)
+library(ggrepel)  # For automatic non-overlapping labels
 
-# Read the GeoJSON file
+# Read the GeoJSON file (New York counties)
 ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
 
-# Convert FIPS in data_filtered to character to match the GeoJSON
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+# Read and filter the CSV file (Observational data)
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 data_filtered$FIPS <- as.character(data_filtered$FIPS)
 
-# Perform the join
+# Join spatial and observational data
 ny_counties_data <- ny_counties_geo %>%
   left_join(data_filtered, by = "FIPS")
 
-# Plot the choropleth map
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+ny_counties_data <- ny_counties_data %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
+
+# Identify the top 5 highest and bottom 5 lowest counties
+top_5_counties <- ny_counties_data %>%
+  arrange(desc(Observational_Coverage)) %>%
+  head(5)
+
+bottom_5_counties <- ny_counties_data %>%
+  arrange(Observational_Coverage) %>%
+  head(5)
+
+# Merge top and bottom 5 counties
+highlighted_counties <- bind_rows(top_5_counties, bottom_5_counties)
+
+# Compute centroids for labeling
+highlighted_counties <- highlighted_counties %>%
+  mutate(centroid = st_centroid(geometry)) %>%
+  mutate(x = st_coordinates(centroid)[,1], 
+         y = st_coordinates(centroid)[,2])
+
+# ---- STATIC MAP ----
 ggplot(ny_counties_data) +
-  geom_sf(aes(fill = Percent_Agricultural_Land_Near_GBIF), color = "black", size = 0.2) +
-  scale_fill_viridis_c(option = "plasma", name = "% Ag > 1km from Obs.") +
+  geom_sf(aes(fill = Observational_Coverage), color = "black", size = 0.2) +
+
+  # Use only geom_label_repel() to avoid double leader lines
+  geom_label_repel(data = highlighted_counties, 
+                   aes(x = x, y = y, label = COUNTYNAME.x), 
+                   size = 4, fontface = "bold", 
+                   fill = "white", color = "black",  # High contrast for all backgrounds
+                   box.padding = 0.5, point.padding = 0.3, segment.color = "white") + 
+  
+  scale_fill_viridis_c(option = "plasma", name = "") +
   theme_minimal() +
-  labs(title = "GBIF Coverage",
-       caption = "Data Source: GBIF 2023",
-       fill = "Agricultural %") +
+  labs(title = "",
+       caption = "",
+       fill = "Agricultural %",
+       x = NULL,  # Removes x-axis label
+       y = NULL) +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
     legend.position = "right"
+  )
+
+# ---- INTERACTIVE MAP ----
+# Create a color palette
+pal <- colorNumeric(
+  palette = "plasma",
+  domain = ny_counties_data$Observational_Coverage
+)
+
+leaflet(ny_counties_data) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(Observational_Coverage),
+    weight = 1,
+    opacity = 1,
+    color = "black",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.9,
+      bringToFront = TRUE
+    ),
+    label = ~paste(
+      "County:", COUNTYNAME.x, "<br>",
+      "Observational Coverage:", round(Observational_Coverage, 3)
+    ),
+    labelOptions = labelOptions(
+      style = list("font-size" = "12px", "background" = "white", "padding" = "5px")
+    )
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = ~Observational_Coverage,
+    title = "Observational Coverage",
+    opacity = 1
+  ) %>%
+  addFullscreenControl() %>%
+  addLabelOnlyMarkers(
+    data = highlighted_counties,
+    lng = ~x, lat = ~y,
+    label = ~COUNTYNAME.x,
+    labelOptions = labelOptions(
+      noHide = TRUE,
+      direction = "top",
+      textOnly = TRUE,
+      style = list(
+        "color" = "black",  # Ensures visibility on all backgrounds
+        "font-weight" = "bold",
+        "background" = "white",
+        "border" = "2px solid black",  # Ensures high contrast
+        "padding" = "5px",
+        "border-radius" = "5px"
+      )
+    )
   )
 ```
 
 ## Bar Plot
 
 ```{r}
-# Bar plot assigned to a variable
-bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -Percent_Agricultural_Land_Near_GBIF), 
-                                      y = Percent_Agricultural_Land_Near_GBIF)) +
-  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +  # Add margin between bars
+library(sf)
+library(dplyr)
+library(ggplot2)
+
+# Read the GeoJSON file
+ny_counties_geo <- st_read("../Dataset/ny_counties_statistics.geojson")
+
+# Read and filter the CSV file
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+data_filtered$FIPS <- as.character(data_filtered$FIPS)
+
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
+
+# Identify the top 5 highest and bottom 5 lowest counties
+top_5_counties <- data_filtered %>%
+  arrange(desc(Observational_Coverage)) %>%
+  head(5) %>%
+  pull(COUNTYNAME)
+
+bottom_5_counties <- data_filtered %>%
+  arrange(Observational_Coverage) %>%
+  head(5) %>%
+  pull(COUNTYNAME)
+
+# Add a new column to classify counties into top 5, bottom 5, or others
+data_filtered <- data_filtered %>%
+  mutate(Highlight = case_when(
+    COUNTYNAME %in% top_5_counties ~ "Top 5",
+    COUNTYNAME %in% bottom_5_counties ~ "Bottom 5",
+    TRUE ~ "Others"
+  ))
+
+# Bar plot with highlighted top 5 and bottom 5 counties
+bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, Observational_Coverage), 
+                                      y = Observational_Coverage, 
+                                      fill = Highlight)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_fill_manual(values = c("Top 5" = "orange", "Bottom 5" = "purple", "Others" = "gray")) + # Custom colors
   coord_flip() +
   theme_minimal() +
-  labs(title = "Neglected GBIF Coverage",
-       x = "County", y = "Ag Land > 1km GBIF",
-       caption = "Data Source: GBIF 2023, NLCD") +
+  labs(title = "",
+       x = "County", y = "Coverage",
+       caption = "") +
   theme(
-    axis.text.y = element_text(size = 10)  # Increase text size for readability
+    axis.text.y = element_text(size = 10),  # Increase text size for readability
+    legend.position = "none" # Move legend to top
   )
 
 # Display the plot
 print(bar_plot)
 
 # Save the plot
-ggsave("bar_plot_with_margins.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
+ggsave("bar_plot_highlighted_top_bottom.png", plot = bar_plot, width = 8, height = 8, dpi = 300)
 ```
 
 ## Box Plot
@@ -279,3 +546,74 @@ ggplot(data_filtered, aes(x = Percent_Agricultural_Land_Near_GBIF)) +
        y = "Count of Counties",
        caption = "Data Source: GBIF 2023")
 ```
+# General Statistics
+
+## Observational Density
+```{r}
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+
+# Calculate the median of the specified column in the filtered dataset
+median_value <- median(data_filtered$X2023_GBIF_Observation_Count_Per_km2, na.rm = TRUE)
+
+print(paste('Median observations per km2 in 2023: ', median_value))
+print(paste('Median observations per km2 per month in 2023: ', median_value / 12))
+print(paste('Median obs/100km²/month in 2023: ', (median_value / 12) * 100))
+```
+```{r}
+install.packages("psych")
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(psych)  # For descriptive statistics
+
+# Read the dataset
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
+
+# Filter the data
+data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
+
+# Assign variables for analysis
+population_density <- data_filtered$X2023.Population.Density.km2
+proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
+proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+
+# ---------------------------------
+# 4. Scatterplots with Trendlines
+# ---------------------------------
+cat("\nGenerating Scatterplots...\n")
+
+# Scatterplot 1: median_household_income vs GBIF Disparity
+ggplot(data_filtered, aes(x = population_density, y = proportion_gbif_observations_ag)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(title = "Population Density vs GBIF Agricultural Disparity",
+       x = "Population Density km2",
+       y = "GBIF Agricultural Disparity")
+
+# Scatterplot 2: Unemployment Levels vs Percent Ag Lands Near GBIF
+ggplot(data_filtered, aes(x = population_density, y = proportion_ag_lands_not_near_gbif_observations)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "green") +
+  labs(title = "Population Density vs Percent Ag Lands >1km GBIF",
+       x = "Population Density km2",
+       y = "Percent Agricultural Land >1km GBIF")
+
+# ---------------------------------
+# 5. Regression Analysis (Optional)
+# ---------------------------------
+cat("\nRunning Regression Models...\n")
+
+# Regression 1: Education Levels -> GBIF Agricultural Disparity
+model1 <- lm(proportion_gbif_observations_ag ~ population_density, data = data_filtered)
+summary_model1 <- summary(model1)
+print("Regression - Population Density predicting GBIF Disparity")
+print(summary_model1)
+
+# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
+model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ population_density, data = data_filtered)
+summary_model2 <- summary(model2)
+print("Regression - Population Density predicting Percent Ag Lands >1km GBIF")
+print(summary_model2)
+```
+

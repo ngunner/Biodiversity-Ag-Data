@@ -6,367 +6,185 @@ output: html_notebook
 # 2018-2022 Completion of College Rate
 
 ```{r}
-install.packages("psych")
 # Load required libraries
 library(ggplot2)
 library(dplyr)
 library(psych)  # For descriptive statistics
+library(ggrepel)  # For non-overlapping labels
 
 # Read the dataset
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 
 # Filter the data
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 
 education_levels <- data_filtered$X2018.2022.Completion.of.College.Rate
 
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
 
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+# Define the list of counties to label
+counties_to_label <- c("Suffolk", "Tompkins", "Dutchess", "Niagara", 
+                        "Ulster", "Clinton", "Allegany", "Lewis", 
+                        "Franklin", "Steuben")
 
-# Assign variables for analysis
-education_levels <- data_filtered$X2018.2022.Completion.of.College.Rate
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+# Ensure the correct column name for counties
+county_column_name <- "COUNTYNAME"  # Update this if your dataset uses a different column name
 
-# ---------------------------------
-# 1. Descriptive Statistics
-# ---------------------------------
-cat("Descriptive Statistics for All Variables:\n")
-describe(data_filtered[, c("X2018.2022.Completion.of.College.Rate", 
-                           "GBIF_Agricultural_Disparity", 
-                           "Percent_Agricultural_Land_Near_GBIF")])
+# Filter the dataset for only those counties
+data_labels <- data_filtered %>% filter(!!sym(county_column_name) %in% counties_to_label)
 
-# ---------------------------------
-# 2. Normality Tests (Shapiro-Wilk)
-# ---------------------------------
-cat("\nNormality Test Results:\n")
-
-shapiro_edu <- shapiro.test(education_levels)
-shapiro_gbif <- shapiro.test(proportion_gbif_observations_ag)
-shapiro_ag_lands <- shapiro.test(proportion_ag_lands_not_near_gbif_observations)
-
-print("Shapiro Test - College Completion Rates")
-print(shapiro_edu)
-
-print("Shapiro Test - GBIF Agricultural Disparity")
-print(shapiro_gbif)
-
-print("Shapiro Test - Percent Agricultural Land >1km GBIF")
-print(shapiro_ag_lands)
-
-# ---------------------------------
-# 3. Correlation Analysis
-# ---------------------------------
-cat("\nCorrelation Analysis:\n")
-
-# Pearson (if normal) or Spearman correlation tests
-cor_test_edu_gbif <- cor.test(education_levels, proportion_gbif_observations_ag, method = "spearman")
-cor_test_edu_aglands <- cor.test(education_levels, proportion_ag_lands_not_near_gbif_observations, method = "spearman")
-cor_test_gbif_aglands <- cor.test(proportion_gbif_observations_ag, proportion_ag_lands_not_near_gbif_observations, method = "spearman")
-
-print("Spearman Correlation - Education Levels vs GBIF Disparity")
-print(cor_test_edu_gbif)
-
-print("Spearman Correlation - Education Levels vs Percent Ag Lands >1km GBIF")
-print(cor_test_edu_aglands)
-
-print("Spearman Correlation - GBIF Disparity vs Percent Ag Lands >1km GBIF")
-print(cor_test_gbif_aglands)
-
-# ---------------------------------
-# 4. Scatterplots with Trendlines
-# ---------------------------------
-cat("\nGenerating Scatterplots...\n")
-
-# Scatterplot 1: Education Levels vs GBIF Disparity
-ggplot(data_filtered, aes(x = education_levels, y = proportion_gbif_observations_ag)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Education Levels vs GBIF Agricultural Disparity",
-       x = "College Completion Rate (%)",
-       y = "GBIF Agricultural Disparity")
-
-# Scatterplot 2: Education Levels vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = education_levels, y = proportion_ag_lands_not_near_gbif_observations)) +
+# Scatterplot with trendline and non-overlapping labels
+ggplot(data_filtered, aes(x = education_levels, y = Observational_Coverage)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "green") +
-  labs(title = "Education Levels vs Percent Ag Lands >1km GBIF",
+  geom_text_repel(data = data_labels, aes(x = X2018.2022.Completion.of.College.Rate, 
+                                          y = Observational_Coverage, 
+                                          label = !!sym(county_column_name)), 
+                  size = 3.5, color = "red", max.overlaps = 10) +
+  labs(title = "",
        x = "College Completion Rate (%)",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# Scatterplot 3: GBIF Disparity vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = proportion_gbif_observations_ag, y = proportion_ag_lands_not_near_gbif_observations)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "red") +
-  labs(title = "GBIF Agricultural Disparity vs Percent Ag Lands >1km GBIF",
-       x = "GBIF Agricultural Disparity",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# ---------------------------------
-# 5. Regression Analysis (Optional)
-# ---------------------------------
-cat("\nRunning Regression Models...\n")
-
-# Regression 1: Education Levels -> GBIF Agricultural Disparity
-model1 <- lm(proportion_gbif_observations_ag ~ education_levels, data = data_filtered)
-summary_model1 <- summary(model1)
-print("Regression - Education Levels predicting GBIF Disparity")
-print(summary_model1)
-
-# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
-model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ education_levels, data = data_filtered)
-summary_model2 <- summary(model2)
-print("Regression - Education Levels predicting Percent Ag Lands >1km GBIF")
-print(summary_model2)
-
-# Regression 3: GBIF Disparity -> Percent Ag Lands Near GBIF
-model3 <- lm(proportion_ag_lands_not_near_gbif_observations ~ proportion_gbif_observations_ag, data = data_filtered)
-summary_model3 <- summary(model3)
-print("Regression - GBIF Disparity predicting Percent Ag Lands >1km GBIF")
-print(summary_model3)
+       y = "Observational Coverage") +
+  theme_minimal()
 ```
 
 # 2022 Unemployment Rate
 
 ```{r}
-install.packages("psych")
 # Load required libraries
 library(ggplot2)
 library(dplyr)
 library(psych)  # For descriptive statistics
+library(ggrepel)  # For non-overlapping labels
 
 # Read the dataset
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 
 # Filter the data
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 
 unemployment_rate <- data_filtered$X2022.Unemployment.Rate
 
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
 
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+# Define the list of counties to label
+counties_to_label <- c("Suffolk", "Tompkins", "Dutchess", "Niagara", 
+                        "Ulster", "Clinton", "Allegany", "Lewis", 
+                        "Franklin", "Steuben")
 
-# Assign variables for analysis
-unemployment_rate <- data_filtered$X2022.Unemployment.Rate
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
+# Ensure the correct column name for counties
+county_column_name <- "COUNTYNAME"  # Update this if your dataset uses a different column name
 
-# ---------------------------------
-# 1. Descriptive Statistics
-# ---------------------------------
-#cat("Descriptive Statistics for All Variables:\n")
-#describe(data_filtered[, c("data_filtered$X2022.Unemployment.Rate", 
-#                          "GBIF_Agricultural_Disparity", 
-#                         "Percent_Agricultural_Land_Near_GBIF")])
+# Filter the dataset for only those counties
+data_labels <- data_filtered %>% filter(!!sym(county_column_name) %in% counties_to_label)
 
-# ---------------------------------
-# 2. Normality Tests (Shapiro-Wilk)
-# ---------------------------------
-cat("\nNormality Test Results:\n")
-
-shapiro_edu <- shapiro.test(unemployment_rate)
-shapiro_gbif <- shapiro.test(proportion_gbif_observations_ag)
-shapiro_ag_lands <- shapiro.test(proportion_ag_lands_not_near_gbif_observations)
-
-print("Shapiro Test - College Completion Rates")
-print(shapiro_edu)
-
-print("Shapiro Test - GBIF Agricultural Disparity")
-print(shapiro_gbif)
-
-print("Shapiro Test - Percent Agricultural Land >1km GBIF")
-print(shapiro_ag_lands)
-
-# ---------------------------------
-# 3. Correlation Analysis
-# ---------------------------------
-cat("\nCorrelation Analysis:\n")
-
-# Pearson (if normal) or Spearman correlation tests
-cor_test_edu_gbif <- cor.test(unemployment_rate, proportion_gbif_observations_ag, method = "spearman")
-cor_test_edu_aglands <- cor.test(unemployment_rate, proportion_ag_lands_not_near_gbif_observations, method = "spearman")
-cor_test_gbif_aglands <- cor.test(proportion_gbif_observations_ag, proportion_ag_lands_not_near_gbif_observations, method = "spearman")
-
-print("Spearman Correlation - Education Levels vs GBIF Disparity")
-print(cor_test_edu_gbif)
-
-print("Spearman Correlation - Education Levels vs Percent Ag Lands >1km GBIF")
-print(cor_test_edu_aglands)
-
-print("Spearman Correlation - GBIF Disparity vs Percent Ag Lands >1km GBIF")
-print(cor_test_gbif_aglands)
-
-# ---------------------------------
-# 4. Scatterplots with Trendlines
-# ---------------------------------
-cat("\nGenerating Scatterplots...\n")
-
-# Scatterplot 1: Unemployment Levels vs GBIF Disparity
-ggplot(data_filtered, aes(x = unemployment_rate, y = proportion_gbif_observations_ag)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Unemployment Rate vs GBIF Agricultural Disparity",
-       x = "Unemployment (%)",
-       y = "GBIF Agricultural Disparity")
-
-# Scatterplot 2: Unemployment Levels vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = unemployment_rate, y = proportion_ag_lands_not_near_gbif_observations)) +
+# Scatterplot with trendline and non-overlapping labels
+ggplot(data_filtered, aes(x = unemployment_rate, y = Observational_Coverage)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "green") +
-  labs(title = "Unemployment Rate vs Percent Ag Lands >1km GBIF",
+  geom_text_repel(data = data_labels, aes(x = X2022.Unemployment.Rate, 
+                                          y = Observational_Coverage, 
+                                          label = !!sym(county_column_name)), 
+                  size = 3.5, color = "red", max.overlaps = 10) +
+  labs(title = "",
        x = "Unemployment Rate (%)",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# Scatterplot 3: GBIF Disparity vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = proportion_gbif_observations_ag, y = proportion_ag_lands_not_near_gbif_observations)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "red") +
-  labs(title = "GBIF Agricultural Disparity vs Percent Ag Lands >1km GBIF",
-       x = "GBIF Agricultural Disparity",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# ---------------------------------
-# 5. Regression Analysis (Optional)
-# ---------------------------------
-cat("\nRunning Regression Models...\n")
-
-# Regression 1: Education Levels -> GBIF Agricultural Disparity
-model1 <- lm(proportion_gbif_observations_ag ~ unemployment_rate, data = data_filtered)
-summary_model1 <- summary(model1)
-print("Regression - Unemployment rate predicting GBIF Disparity")
-print(summary_model1)
-
-# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
-model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ unemployment_rate, data = data_filtered)
-summary_model2 <- summary(model2)
-print("Regression - Unemployment rate predicting Percent Ag Lands >1km GBIF")
-print(summary_model2)
-
-# Regression 3: GBIF Disparity -> Percent Ag Lands Near GBIF
-model3 <- lm(proportion_ag_lands_not_near_gbif_observations ~ proportion_gbif_observations_ag, data = data_filtered)
-summary_model3 <- summary(model3)
-print("Regression - GBIF Disparity predicting Percent Ag Lands >1km GBIF")
-print(summary_model3)
+       y = "Observational Coverage") +
+  theme_minimal()
 ```
 
 # 2021 Median Household Income
 
 ```{r}
-install.packages("psych")
 # Load required libraries
 library(ggplot2)
 library(dplyr)
 library(psych)  # For descriptive statistics
+library(ggrepel)  # For non-overlapping labels
 
 # Read the dataset
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 
 # Filter the data
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 
-# Assign variables for analysis
 median_household_income <- data_filtered$X2021.Median.Household.Income
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
 
-# ---------------------------------
-# 4. Scatterplots with Trendlines
-# ---------------------------------
-cat("\nGenerating Scatterplots...\n")
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
 
-# Scatterplot 1: median_household_income vs GBIF Disparity
-ggplot(data_filtered, aes(x = median_household_income, y = proportion_gbif_observations_ag)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Median Household Income vs GBIF Agricultural Disparity",
-       x = "Median Household Income",
-       y = "GBIF Agricultural Disparity")
+# Define the list of counties to label
+counties_to_label <- c("Suffolk", "Tompkins", "Dutchess", "Niagara", 
+                        "Ulster", "Clinton", "Allegany", "Lewis", 
+                        "Franklin", "Steuben")
 
-# Scatterplot 2: Unemployment Levels vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = median_household_income, y = proportion_ag_lands_not_near_gbif_observations)) +
+# Ensure the correct column name for counties
+county_column_name <- "COUNTYNAME"  # Update this if your dataset uses a different column name
+
+# Filter the dataset for only those counties
+data_labels <- data_filtered %>% filter(!!sym(county_column_name) %in% counties_to_label)
+
+# Scatterplot with trendline and non-overlapping labels
+ggplot(data_filtered, aes(x = median_household_income, y = Observational_Coverage)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "green") +
-  labs(title = "Median Household Income vs Percent Ag Lands >1km GBIF",
+  geom_text_repel(data = data_labels, aes(x = X2021.Median.Household.Income, 
+                                          y = Observational_Coverage, 
+                                          label = !!sym(county_column_name)), 
+                  size = 3.5, color = "red", max.overlaps = 10) +
+  labs(title = "",
        x = "Median Household Income",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# ---------------------------------
-# 5. Regression Analysis (Optional)
-# ---------------------------------
-cat("\nRunning Regression Models...\n")
-
-# Regression 1: Education Levels -> GBIF Agricultural Disparity
-model1 <- lm(proportion_gbif_observations_ag ~ median_household_income, data = data_filtered)
-summary_model1 <- summary(model1)
-print("Regression - Median Household Income predicting GBIF Disparity")
-print(summary_model1)
-
-# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
-model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ median_household_income, data = data_filtered)
-summary_model2 <- summary(model2)
-print("Regression - Median Household Income predicting Percent Ag Lands >1km GBIF")
-print(summary_model2)
+       y = "Observational Coverage") +
+  theme_minimal()
 ```
 
 # 2021 Poverty Rate
 
 ```{r}
-install.packages("psych")
 # Load required libraries
 library(ggplot2)
 library(dplyr)
 library(psych)  # For descriptive statistics
+library(ggrepel)  # For non-overlapping labels
 
 # Read the dataset
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 
 # Filter the data
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 
-# Assign variables for analysis
 poverty_rate <- data_filtered$X2021.Poverty.Rate
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
 
-# ---------------------------------
-# 4. Scatterplots with Trendlines
-# ---------------------------------
-cat("\nGenerating Scatterplots...\n")
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
 
-# Scatterplot 1: median_household_income vs GBIF Disparity
-ggplot(data_filtered, aes(x = poverty_rate, y = proportion_gbif_observations_ag)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Poverty Rate vs GBIF Agricultural Disparity",
-       x = "Poverty Rate",
-       y = "GBIF Agricultural Disparity")
+# Define the list of counties to label
+counties_to_label <- c("Suffolk", "Tompkins", "Dutchess", "Niagara", 
+                        "Ulster", "Clinton", "Allegany", "Lewis", 
+                        "Franklin", "Steuben")
 
-# Scatterplot 2: Unemployment Levels vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = poverty_rate, y = proportion_ag_lands_not_near_gbif_observations)) +
+# Ensure the correct column name for counties
+county_column_name <- "COUNTYNAME"  # Update this if your dataset uses a different column name
+
+# Filter the dataset for only those counties
+data_labels <- data_filtered %>% filter(!!sym(county_column_name) %in% counties_to_label)
+
+# Scatterplot with trendline and non-overlapping labels
+ggplot(data_filtered, aes(x = poverty_rate, y = Observational_Coverage)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "green") +
-  labs(title = "Poverty Rate vs Percent Ag Lands >1km GBIF",
-       x = "Poverty Rate",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# ---------------------------------
-# 5. Regression Analysis (Optional)
-# ---------------------------------
-cat("\nRunning Regression Models...\n")
-
-# Regression 1: Education Levels -> GBIF Agricultural Disparity
-model1 <- lm(proportion_gbif_observations_ag ~ poverty_rate, data = data_filtered)
-summary_model1 <- summary(model1)
-print("Regression - Poverty rate predicting GBIF Disparity")
-print(summary_model1)
-
-# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
-model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ poverty_rate, data = data_filtered)
-summary_model2 <- summary(model2)
-print("Regression - Poverty rate predicting Percent Ag Lands >1km GBIF")
-print(summary_model2)
+  geom_text_repel(data = data_labels, aes(x = X2021.Poverty.Rate, 
+                                          y = Observational_Coverage, 
+                                          label = !!sym(county_column_name)), 
+                  size = 3.5, color = "red", max.overlaps = 10) +
+  labs(title = "",
+       x = "Poverty Rate (%)",
+       y = "Observational Coverage") +
+  theme_minimal()
 ```
 
 # 2023 Population Density
@@ -374,58 +192,45 @@ print(summary_model2)
 2023 Population Density km2
 
 ```{r}
-install.packages("psych")
 # Load required libraries
 library(ggplot2)
 library(dplyr)
 library(psych)  # For descriptive statistics
+library(ggrepel)  # For non-overlapping labels
 
 # Read the dataset
-data <- read.csv("../Dataset/v1_2023_gbif_ny.csv")
+data <- read.csv("../Dataset/v2_2023_gbif_ny.csv")
 
 # Filter the data
 data_filtered <- subset(data, Sum_Percent_Land_Use_Agricultural > 0.05)
 
-# Assign variables for analysis
 population_density <- data_filtered$X2023.Population.Density.km2
-proportion_gbif_observations_ag <- data_filtered$GBIF_Agricultural_Disparity
-proportion_ag_lands_not_near_gbif_observations <- data_filtered$Percent_Agricultural_Land_Near_GBIF
 
-# ---------------------------------
-# 4. Scatterplots with Trendlines
-# ---------------------------------
-cat("\nGenerating Scatterplots...\n")
+# Calculate the complement of Percent_Agricultural_Land_Greater_Than_1km_GBIF
+data_filtered <- data_filtered %>%
+  mutate(Observational_Coverage = 1 - Percent_Agricultural_Land_Greater_Than_1km_GBIF)
 
-# Scatterplot 1: median_household_income vs GBIF Disparity
-ggplot(data_filtered, aes(x = population_density, y = proportion_gbif_observations_ag)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Population Density vs GBIF Agricultural Disparity",
-       x = "Population Density km2",
-       y = "GBIF Agricultural Disparity")
+# Define the list of counties to label
+counties_to_label <- c("Suffolk", "Tompkins", "Dutchess", "Niagara", 
+                        "Ulster", "Clinton", "Allegany", "Lewis", 
+                        "Franklin", "Steuben")
 
-# Scatterplot 2: Unemployment Levels vs Percent Ag Lands Near GBIF
-ggplot(data_filtered, aes(x = population_density, y = proportion_ag_lands_not_near_gbif_observations)) +
+# Ensure the correct column name for counties
+county_column_name <- "COUNTYNAME"  # Update this if your dataset uses a different column name
+
+# Filter the dataset for only those counties
+data_labels <- data_filtered %>% filter(!!sym(county_column_name) %in% counties_to_label)
+
+# Scatterplot with trendline and non-overlapping labels
+ggplot(data_filtered, aes(x = population_density, y = Observational_Coverage)) +
   geom_point() +
   geom_smooth(method = "lm", se = TRUE, color = "green") +
-  labs(title = "Population Density vs Percent Ag Lands >1km GBIF",
-       x = "Population Density km2",
-       y = "Percent Agricultural Land >1km GBIF")
-
-# ---------------------------------
-# 5. Regression Analysis (Optional)
-# ---------------------------------
-cat("\nRunning Regression Models...\n")
-
-# Regression 1: Education Levels -> GBIF Agricultural Disparity
-model1 <- lm(proportion_gbif_observations_ag ~ population_density, data = data_filtered)
-summary_model1 <- summary(model1)
-print("Regression - Population Density predicting GBIF Disparity")
-print(summary_model1)
-
-# Regression 2: Education Levels -> Percent Ag Lands Near GBIF
-model2 <- lm(proportion_ag_lands_not_near_gbif_observations ~ population_density, data = data_filtered)
-summary_model2 <- summary(model2)
-print("Regression - Population Density predicting Percent Ag Lands >1km GBIF")
-print(summary_model2)
+  geom_text_repel(data = data_labels, aes(x = X2023.Population.Density.km2, 
+                                          y = Observational_Coverage, 
+                                          label = !!sym(county_column_name)), 
+                  size = 3.5, color = "red", max.overlaps = 10) +
+  labs(title = "",
+       x = "Population Density (People / km2)",
+       y = "Observational Coverage") +
+  theme_minimal()
 ```
