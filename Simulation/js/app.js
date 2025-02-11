@@ -20,58 +20,79 @@ createApp({
             simulationComplete: false,
             totalObservationCount: 0,
             processedPoints: new Set(),
+            customBoundary: null,
+            isComputing: false,
+            simulationResults: null,
+            computationProgress: 0,
             bounds: {
-                minLng: -79.76,
-                maxLng: -71.85,
-                minLat: 40.49,
-                maxLat: 45.01
+                minLng: -79.76195572267673,
+                maxLng: -71.66878968312145,
+                minLat: 40.476578082629224,
+                maxLat: 45.015870524557556
             },
             updateTimeout: null,
-            isDragging: false
+            isDragging: false,
+            isPrecompiling: false,
+            precompileProgress: 0,
+            hasPrecompiledResults: false,
+            startTime: 0,
+            defaultBoundaryLoaded: false,
+            uploadInstructions: 'Choose a GeoJSON file to define a custom boundary area (optional - defaults to NY state)',
+            isGeneratingPoints: false,
+            pointGenerationProgress: 0
         }
     },
     computed: {
         detectionRate() {
             if (this.totalObservationCount === 0) return 0;
             return ((this.detectedPoints.size / this.totalObservationCount) * 100).toFixed(1);
+        },
+        getPlayButtonText() {
+            if (this.isGeneratingPoints) return 'Generating Points...';
+            if (this.isPrecompiling) return 'Preparing Simulation...';
+            if (this.isPlaying) return 'Pause';
+            return 'Play';
         }
     },
-    mounted() {
-        this.map = new maplibregl.Map({
-            container: 'map',
-            style: 'https://demotiles.maplibre.org/style.json',
-            center: [-75.6, 42.9],
-            zoom: 6
-        });
-
-        this.map.on('load', () => {
-            // Add NY boundary source with correct path
-            this.map.addSource('ny-boundary', {
-                'type': 'geojson',
-                'data': './assets/ny-state.geojson'
+    mounted: async function() {
+        try {
+            this.map = new maplibregl.Map({
+                container: 'map',
+                style: 'https://demotiles.maplibre.org/style.json',
+                center: [-75.6, 42.9],
+                zoom: 6
             });
 
-            // Add NY boundary layer
-            this.map.addLayer({
-                'id': 'ny-boundary-line',
-                'type': 'line',
-                'source': 'ny-boundary',
-                'paint': {
-                    'line-color': '#000',
-                    'line-width': 1
-                }
+            // Wait for map to load
+            await new Promise((resolve, reject) => {
+                this.map.on('load', resolve);
+                this.map.on('error', reject);
+            });
+
+            // Load default boundary
+            const response = await fetch('./data/ny_state_boundary.geojson');
+            if (!response.ok) throw new Error('Failed to load default boundary');
+            
+            const geojsonData = await response.json();
+            this.customBoundary = geojsonData;
+            this.defaultBoundaryLoaded = true;
+
+            // Add boundary to map
+            this.map.addSource('boundary', {
+                type: 'geojson',
+                data: this.customBoundary
             });
 
             // Add progress overlay source
             this.map.addSource('progress-overlay', {
-                'type': 'geojson',
-                'data': this.calculateProgressPolygon(0)
+                type: 'geojson',
+                data: this.calculateProgressPolygon(0)
             });
 
             // Add observation points source
             this.map.addSource('observation-points', {
-                'type': 'geojson',
-                'data': {
+                type: 'geojson',
+                data: {
                     type: 'FeatureCollection',
                     features: []
                 }
@@ -79,50 +100,84 @@ createApp({
 
             // Add detected points source
             this.map.addSource('detected-points', {
-                'type': 'geojson',
-                'data': {
+                type: 'geojson',
+                data: {
                     type: 'FeatureCollection',
                     features: []
                 }
             });
 
-            // Add layers
+            // Add map layers
             this.map.addLayer({
-                'id': 'progress-fill',
-                'type': 'fill',
-                'source': 'progress-overlay',
-                'paint': {
-                    'fill-color': '#FF0000',
-                    'fill-opacity': 0.1
+                id: 'boundary-fill',
+                type: 'fill',
+                source: 'boundary',
+                paint: {
+                    'fill-color': '#088',
+                    'fill-opacity': 0.2
                 }
             });
 
             this.map.addLayer({
-                'id': 'observation-points',
-                'type': 'circle',
-                'source': 'observation-points',
-                'paint': {
+                id: 'boundary-line',
+                type: 'line',
+                source: 'boundary',
+                paint: {
+                    'line-color': '#088',
+                    'line-width': 2
+                }
+            });
+
+            // Add progress overlay layer
+            this.map.addLayer({
+                id: 'progress-overlay',
+                type: 'fill',
+                source: 'progress-overlay',
+                paint: {
+                    'fill-color': '#ff0000',
+                    'fill-opacity': 0.2
+                }
+            });
+
+            // Add observation points layer
+            this.map.addLayer({
+                id: 'observation-points',
+                type: 'circle',
+                source: 'observation-points',
+                paint: {
                     'circle-radius': 4,
-                    'circle-color': '#666666'
+                    'circle-color': '#666',
+                    'circle-opacity': 0.7,
+                    // Add a pulse effect
+                    'circle-radius-transition': {duration: 1000},
+                    'circle-opacity-transition': {duration: 1000}
                 }
             });
 
+            // Add detected points layer
             this.map.addLayer({
-                'id': 'detected-points',
-                'type': 'circle',
-                'source': 'detected-points',
-                'paint': {
-                    'circle-radius': 4,
-                    'circle-color': '#FF0000'
+                id: 'detected-points',
+                type: 'circle',
+                source: 'detected-points',
+                paint: {
+                    'circle-radius': 6,
+                    'circle-color': '#ff0000',
+                    'circle-opacity': 0.9,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
                 }
             });
 
-            // Generate initial points
             this.generatePotentialPoints();
-        });
+
+        } catch (error) {
+            console.error('Error in mounted:', error);
+        }
     },
     methods: {
         calculateProgressPolygon(progress) {
+            if (!this.bounds) return null;
+            
             // Calculate the longitude where the pest has spread to
             const spreadLng = this.bounds.minLng + ((this.bounds.maxLng - this.bounds.minLng) * progress);
             
@@ -268,18 +323,32 @@ createApp({
                 });
             }
         },
-        toggleAnimation() {
+        async toggleAnimation() {
             // Don't allow restart if complete - must reset first
             if (this.simulationComplete && !this.isPlaying) {
                 return;
             }
 
-            this.isPlaying = !this.isPlaying;
             if (this.isPlaying) {
-                this.animate();
-            } else {
+                // If already playing, just pause
+                this.isPlaying = false;
                 cancelAnimationFrame(this.animationFrame);
+                return;
             }
+
+            // Generate points if we haven't yet
+            if (this.observationPoints.length === 0) {
+                this.isGeneratingPoints = true;
+                await this.generatePotentialPoints();
+            }
+
+            // If we don't have precompiled results, do that first
+            if (!this.hasPrecompiledResults) {
+                await this.precomputeSimulation();
+            }
+
+            this.isPlaying = true;
+            this.playPrecomputedSimulation();
         },
         animate() {
             if (!this.isPlaying) return;
@@ -345,65 +414,67 @@ createApp({
             this.resetSimulation();
         },
         generatePotentialPoints() {
-            // Clear existing points
-            this.observationPoints = [];
-            this.currentPoints = [];
-            this.detectedPoints = new Set();
-            
-            // Calculate dimensions
-            const width = (this.bounds.maxLng - this.bounds.minLng) * 111 * Math.cos(42.9 * Math.PI / 180); // km
-            const height = (this.bounds.maxLat - this.bounds.minLat) * 111; // km
-            
-            // Calculate grid size for 100km²
-            const gridSize = 10; // 10km x 10km = 100km²
-            const numCols = Math.ceil(width / gridSize);
-            const numRows = Math.ceil(height / gridSize);
-            
-            // Calculate total months
-            const totalMonths = Math.ceil((this.endDate - this.startDate) / (1000 * 60 * 60 * 24 * 30.44));
+            return new Promise((resolve) => {
+                if (!this.customBoundary || !this.customBoundary.features) {
+                    console.error('Invalid boundary data');
+                    this.isGeneratingPoints = false;
+                    resolve();
+                    return;
+                }
 
-            // For each grid cell
-            for (let row = 0; row < numRows; row++) {
-                for (let col = 0; col < numCols; col++) {
-                    // Calculate cell bounds
-                    const cellMinLng = this.bounds.minLng + (col * gridSize / (111 * Math.cos(42.9 * Math.PI / 180)));
-                    const cellMaxLng = this.bounds.minLng + ((col + 1) * gridSize / (111 * Math.cos(42.9 * Math.PI / 180)));
-                    const cellMinLat = this.bounds.minLat + (row * gridSize / 111);
-                    const cellMaxLat = this.bounds.minLat + ((row + 1) * gridSize / 111);
+                this.pointGenerationProgress = 0;
+                this.observationPoints = [];
+                const polygon = this.customBoundary.features[0];
+                const bbox = turf.bbox(polygon);
+                
+                // Calculate point count based on area and density
+                const area = turf.area(polygon) / 1000000; // Convert to km²
+                const monthsInSimulation = (this.endDate - this.startDate) / (1000 * 60 * 60 * 24 * 30);
+                const pointCount = Math.round(area * this.observationDensity * monthsInSimulation);
+                
+                let validPoints = 0;
 
-                    // For each month
-                    for (let month = 0; month < totalMonths; month++) {
-                        // Generate observations for this cell this month
-                        for (let obs = 0; obs < this.observationDensity; obs++) {
-                            const monthStart = new Date(this.startDate);
-                            monthStart.setMonth(monthStart.getMonth() + month);
-                            const monthEnd = new Date(monthStart);
-                            monthEnd.setMonth(monthEnd.getMonth() + 1);
+                const generateChunk = () => {
+                    const chunkSize = 100;
+                    let pointsInChunk = 0;
 
-                            const point = {
+                    while (pointsInChunk < chunkSize && validPoints < pointCount) {
+                        const point = turf.randomPosition(bbox);
+                        if (turf.booleanPointInPolygon(point, polygon)) {
+                            const timestamp = this.startDate.getTime() + 
+                                Math.random() * (this.endDate.getTime() - this.startDate.getTime());
+                            
+                            this.observationPoints.push({
                                 type: 'Feature',
                                 geometry: {
                                     type: 'Point',
-                                    coordinates: [
-                                        cellMinLng + Math.random() * (cellMaxLng - cellMinLng),
-                                        cellMinLat + Math.random() * (cellMaxLat - cellMinLat)
-                                    ]
+                                    coordinates: point
                                 },
                                 properties: {
-                                    id: this.observationPoints.length,
-                                    timestamp: monthStart.getTime() + Math.random() * (monthEnd - monthStart)
+                                    id: validPoints.toString(),
+                                    timestamp: timestamp
                                 }
-                            };
-                            this.observationPoints.push(point);
+                            });
+                            validPoints++;
+                            pointsInChunk++;
                         }
                     }
-                }
-            }
 
-            // Sort points by timestamp
-            this.observationPoints.sort((a, b) => a.properties.timestamp - b.properties.timestamp);
+                    this.pointGenerationProgress = (validPoints / pointCount) * 100;
+
+                    if (validPoints < pointCount) {
+                        setTimeout(generateChunk, 0);
+                    } else {
+                        this.observationPoints.sort((a, b) => a.properties.timestamp - b.properties.timestamp);
+                        this.isGeneratingPoints = false;
+                        resolve();
+                    }
+                };
+
+                generateChunk();
+            });
         },
-        resetSimulation() {
+        resetSimulation(generatePoints = true) {
             if (this.isPlaying) {
                 this.isPlaying = false;
                 cancelAnimationFrame(this.animationFrame);
@@ -441,7 +512,270 @@ createApp({
                 }
             }
 
-            this.generatePotentialPoints();
+            if (generatePoints) {
+                this.generatePotentialPoints();
+            }
+        },
+        fixPolygonWinding(geojson) {
+            const isClockwise = coords => {
+                let sum = 0;
+                for (let i = 0; i < coords.length - 1; i++) {
+                    sum += (coords[i + 1][0] - coords[i][0]) * (coords[i + 1][1] + coords[i][1]);
+                }
+                return sum > 0;
+            };
+
+            const reverseCoords = coords => {
+                if (Array.isArray(coords[0][0])) {
+                    return coords.map(reverseCoords);
+                }
+                return coords.reverse();
+            };
+
+            geojson.features.forEach(feature => {
+                if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+                    const coords = feature.geometry.coordinates;
+                    if (feature.geometry.type === 'Polygon') {
+                        if (isClockwise(coords[0])) {
+                            feature.geometry.coordinates = reverseCoords(coords);
+                        }
+                    } else {
+                        coords.forEach((poly, i) => {
+                            if (isClockwise(poly[0])) {
+                                feature.geometry.coordinates[i] = reverseCoords(poly);
+                            }
+                        });
+                    }
+                }
+            });
+
+            return geojson;
+        },
+        async handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                const reader = new FileReader();
+                const fileContent = await new Promise((resolve, reject) => {
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+
+                // Parse and validate GeoJSON
+                const geojsonData = JSON.parse(fileContent);
+                if (!geojsonData.type || !geojsonData.features) {
+                    throw new Error('Invalid GeoJSON format');
+                }
+
+                this.customBoundary = this.fixPolygonWinding(geojsonData);
+                
+                // Update the map with the new boundary
+                if (this.map.getSource('boundary')) {
+                    this.map.getSource('boundary').setData(this.customBoundary);
+                }
+
+                // Fit map to boundary
+                const bbox = turf.bbox(this.customBoundary);
+                this.map.fitBounds([
+                    [bbox[0], bbox[1]],
+                    [bbox[2], bbox[3]]
+                ], { padding: 50 });
+
+                // Update bounds based on new boundary
+                this.bounds = this.calculateBoundsFromGeoJSON(this.customBoundary);
+
+                // Reset simulation state
+                this.resetSimulation(false); // Don't generate points yet
+
+            } catch (error) {
+                console.error('Error loading file:', error);
+                alert('Error loading boundary file: ' + error.message);
+            }
+
+            // Clear the file input so the same file can be selected again
+            event.target.value = '';
+        },
+        calculateBoundsFromGeoJSON(geojson) {
+            let minLng = Infinity, maxLng = -Infinity;
+            let minLat = Infinity, maxLat = -Infinity;
+
+            const processCoords = coords => {
+                if (!coords) return;
+                
+                if (Array.isArray(coords[0])) {
+                    coords.forEach(processCoords);
+                } else if (coords.length >= 2) {  // Make sure we have at least [lng, lat]
+                    minLng = Math.min(minLng, coords[0]);
+                    maxLng = Math.max(maxLng, coords[0]);
+                    minLat = Math.min(minLat, coords[1]);
+                    maxLat = Math.max(maxLat, coords[1]);
+                }
+            };
+
+            try {
+                if (geojson.features && Array.isArray(geojson.features)) {
+                    geojson.features.forEach(feature => {
+                        if (feature && feature.geometry && feature.geometry.coordinates) {
+                            processCoords(feature.geometry.coordinates);
+                        }
+                    });
+                } else if (geojson.geometry && geojson.geometry.coordinates) {
+                    processCoords(geojson.geometry.coordinates);
+                }
+
+                // Check if we found any valid coordinates
+                if (minLng === Infinity || maxLng === -Infinity || 
+                    minLat === Infinity || maxLat === -Infinity) {
+                    throw new Error('No valid coordinates found in GeoJSON');
+                }
+
+                return { minLng, maxLng, minLat, maxLat };
+            } catch (error) {
+                console.error('Error processing GeoJSON bounds:', error);
+                // Return a default bounding box (e.g., New York State)
+                return {
+                    minLng: -79.762152,
+                    maxLng: -71.856214,
+                    minLat: 40.496103,
+                    maxLat: 45.015851
+                };
+            }
+        },
+        async precomputeSimulation() {
+            this.isPrecompiling = true;
+            this.precompileProgress = 0;
+            
+            try {
+                console.log('Starting precomputation...');
+                
+                // Create worker with correct relative path
+                const worker = new Worker('./js/simulation-worker.js');
+                
+                worker.onmessage = (e) => {
+                    if (e.data.type === 'error') {
+                        console.error('Worker reported error:', e.data.error);
+                        this.isPrecompiling = false;
+                        alert('Simulation error: ' + e.data.error);
+                        return;
+                    }
+                    
+                    if (e.data.type === 'progress') {
+                        console.log('Progress update:', e.data.progress);
+                        this.precompileProgress = e.data.progress;
+                    } else if (e.data.type === 'complete') {
+                        console.log('Simulation complete, processing results...');
+                        this.simulationResults = e.data.results;
+                        this.isPrecompiling = false;
+                        this.hasPrecompiledResults = true;
+                        this.playPrecomputedSimulation();
+                    }
+                };
+
+                worker.onerror = (error) => {
+                    console.error('Worker error event:', error);
+                    this.isPrecompiling = false;
+                    worker.terminate();
+                    alert('Simulation error: ' + error.message);
+                };
+
+                // Prepare serializable data for the worker
+                const workerData = {
+                    startDate: this.startDate.getTime(),
+                    endDate: this.endDate.getTime(),
+                    bounds: {
+                        minLng: Number(this.bounds.minLng),
+                        maxLng: Number(this.bounds.maxLng),
+                        minLat: Number(this.bounds.minLat),
+                        maxLat: Number(this.bounds.maxLat)
+                    },
+                    taxonomicalLikelihood: Number(this.taxonomicalLikelihood),
+                    observationPoints: this.observationPoints.map(point => ({
+                        id: point.properties.id,
+                        timestamp: point.properties.timestamp,
+                        lng: point.geometry.coordinates[0],
+                        lat: point.geometry.coordinates[1]
+                    }))
+                };
+
+                // Initialize the worker with configuration
+                console.log('Sending init message to worker...');
+                worker.postMessage({
+                    type: 'init',
+                    config: workerData
+                });
+
+            } catch (error) {
+                console.error('Error in precomputeSimulation:', error);
+                this.isPrecompiling = false;
+                alert('Error starting simulation: ' + error.message);
+            }
+        },
+        playPrecomputedSimulation() {
+            if (!this.simulationResults || !this.simulationResults.length) {
+                console.error('No simulation results available');
+                return;
+            }
+            
+            this.isPlaying = true;
+            let currentIndex = 0;
+            
+            const playStep = () => {
+                if (!this.isPlaying || currentIndex >= this.simulationResults.length) {
+                    this.isPlaying = false;
+                    return;
+                }
+
+                const step = this.simulationResults[currentIndex];
+                this.currentTime = step.timestamp;
+                this.updateMapWithPrecomputedStep(step);
+                
+                currentIndex++;
+                requestAnimationFrame(playStep);
+            };
+
+            playStep();
+        },
+        updateMapWithPrecomputedStep(step) {
+            if (!this.map) return;
+
+            const progress = (step.timestamp - this.startDate.getTime()) / 
+                           (this.endDate.getTime() - this.startDate.getTime());
+
+            // Update progress overlay (sweep effect)
+            if (this.map.getSource('progress-overlay')) {
+                this.map.getSource('progress-overlay').setData(this.calculateProgressPolygon(progress));
+            }
+
+            // Update observation points with flash effect
+            if (this.map.getSource('observation-points')) {
+                this.map.getSource('observation-points').setData({
+                    type: 'FeatureCollection',
+                    features: step.currentPoints
+                });
+            }
+
+            // Update detected points
+            if (this.map.getSource('detected-points')) {
+                this.map.getSource('detected-points').setData({
+                    type: 'FeatureCollection',
+                    features: step.detectedPoints
+                });
+            }
+        },
+        convertToGeoJSON(points) {
+            return points.map(point => ({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [point.lng, point.lat]
+                },
+                properties: {
+                    id: point.id,
+                    timestamp: point.timestamp
+                }
+            }));
         }
     }
 }).mount('#app')

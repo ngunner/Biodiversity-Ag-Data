@@ -8,7 +8,8 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- Add MapLibre GL JS -->
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
-    <script src='https://unpkg.com/@turf/turf@6/dist/turf.min.js'></script>
+    <!-- Add Turf.js before app.js -->
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <!-- Add your CSS -->
     <link rel="stylesheet" href="css/style.css">
@@ -16,8 +17,36 @@
 <body>
     <div id="app">
         <div id="map"></div>
+        <div v-if="isGeneratingPoints" class="loading-overlay">
+            <div class="loading-content">
+                <h3>Generating Observation Points</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: pointGenerationProgress + '%' }"></div>
+                </div>
+                <p>{{ Math.round(pointGenerationProgress) }}% complete</p>
+            </div>
+        </div>
         <div class="parameters-panel">
-            <h3>Observation Parameters</h3>
+            <h3>Simulation Parameters</h3>
+            <div class="parameter-group">
+                <label>Boundary Area</label>
+                <p class="upload-instructions">{{ uploadInstructions }}</p>
+                <div class="file-input-wrapper">
+                    <input
+                        type="file"
+                        @change="handleFileUpload"
+                        accept=".geojson,.json"
+                        class="hidden"
+                        id="file-upload"
+                    >
+                    <label
+                        for="file-upload"
+                        class="upload-button"
+                    >
+                        Choose Boundary File
+                    </label>
+                </div>
+            </div>
             <div class="parameter-group">
                 <label>Observation Density (obs/100km²/month)</label>
                 <input 
@@ -90,9 +119,23 @@
                 :step="86400000"
                 @input="updateProgress"
             >
-            <button @click="toggleAnimation" class="play-button">
-                {{ isPlaying ? 'Pause' : 'Play' }}
+            <button 
+                @click="toggleAnimation" 
+                class="play-button"
+                :disabled="isGeneratingPoints || isPrecompiling"
+            >
+                {{ getPlayButtonText }}
             </button>
+        </div>
+        <!-- Replace the precompilation progress modal -->
+        <div v-if="isPrecompiling" class="loading-overlay">
+            <div class="loading-content">
+                <h3>Preparing Simulation</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: precompileProgress + '%' }"></div>
+                </div>
+                <p>{{ Math.round(precompileProgress) }}% complete</p>
+            </div>
         </div>
     </div>
     <script src="js/app.js"></script>
