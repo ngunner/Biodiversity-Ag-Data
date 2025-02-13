@@ -82,12 +82,56 @@
                     {{ isPlaying ? 'Pause' : 'Start' }}
                 </button>
                 <button 
-                    @click="currentDate = new Date(startDate)"
+                    @click="resetSimulation"
                     :disabled="isPlaying"
                 >
                     Reset
                 </button>
+                <button @click="showStats = !showStats" class="stats-toggle">
+                    {{ showStats ? 'Hide Stats' : 'Show Stats' }}
+                </button>
             </div>
+
+            <!-- Add this after the control buttons -->
+            <div class="stats-panel" :class="{ 'stats-panel-open': showStats }">
+                <div class="stats-header">
+                    <h3>Simulation Statistics</h3>
+                    <button class="close-stats" @click="showStats = false">&times;</button>
+                </div>
+                <div class="stat-grid" v-if="observations.length > 0">
+                    <div class="stat-item">
+                        <label>Total Observations</label>
+                        <span>{{ stats.totalObservations }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Total Detections</label>
+                        <span>{{ stats.totalDetections }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Detection Rate</label>
+                        <span>{{ stats.detectionRate }}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Pest Area</label>
+                        <span>{{ stats.pestArea }} km²</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Coverage</label>
+                        <span>{{ stats.coveragePercent }} detections/km²</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Days to First Detection</label>
+                        <span>{{ stats.daysToFirstDetection ?? 'N/A' }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Avg. Detections/Day</label>
+                        <span>{{ stats.avgDetectionsPerDay }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-if="isLoading" class="loading-spinner">
+            <div class="spinner"></div>
         </div>
     </div>
     <script src="js/app.js"></script>

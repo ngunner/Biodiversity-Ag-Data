@@ -8,15 +8,28 @@ createApp({
             isPlaying: false,
             // Simulation parameters
             observationDensity: 1,    // observations per 100km² per month
-            detectionRate: 80,        // % chance of detecting pest if present
-            startDate: new Date('2024-01-01'),
-            endDate: new Date('2024-12-31'),
-            currentDate: new Date('2024-01-01'),
+            detectionRate: 20,        // % chance of detecting pest if present
+            startDate: new Date('2025-05-01'),
+            endDate: new Date('2025-09-31'),
+            currentDate: new Date('2025-05-01'),
             // Simulation state
             observations: [],
             detections: [],
             pestProgress: 0,  // 0 to 1, representing spread from west to east
             accumulatedDetections: new Set(), // Add this to store all successful detections
+            isLoading: false, // Add this new property
+            stats: {
+                totalObservations: 0,
+                totalDetections: 0,
+                detectionRate: 0,
+                pestArea: 0,
+                coveragePercent: 0,
+                daysToFirstDetection: null,
+                avgDetectionsPerDay: 0,
+                detectionsByWeek: []
+            },
+            showStats: false,  // Controls statistics panel visibility
+            simulationComplete: false,  // Add this new property
         }
     },
 
@@ -101,9 +114,9 @@ createApp({
                 type: 'circle',
                 source: 'detections',
                 paint: {
-                    'circle-radius': 6,
+                    'circle-radius': 4,
                     'circle-color': '#ff0000',
-                    'circle-stroke-width': 2,
+                    'circle-stroke-width': 0,
                     'circle-stroke-color': '#fff'
                 }
             });
@@ -129,19 +142,19 @@ createApp({
                 let feature = geojson.features[0];
                 
                 // First try a convex hull if the geometry is very complex
-                const points = turf.explode(feature);
-                const hull = turf.convex(points);
+                // const points = turf.explode(feature);
+                // const hull = turf.convex(points);
                 
                 // Or use simplification with tolerance
-                // const simplified = turf.simplify(feature, {
-                //     tolerance: 0.01,
-                //     highQuality: true
-                // });
+                const simplified = turf.simplify(feature, {
+                    tolerance: 0.01,
+                    highQuality: true
+                });
 
                 // Create new FeatureCollection with simplified geometry
                 this.boundary = {
                     type: 'FeatureCollection',
-                    features: [hull] // or [simplified] if using simplification
+                    features: [simplified] // or [simplified] if using simplification
                 };
 
                 // Update map
@@ -152,7 +165,7 @@ createApp({
                 this.map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 50 });
 
                 console.log('Original vertices:', turf.explode(feature).features.length);
-                console.log('Simplified vertices:', turf.explode(hull).features.length);
+                console.log('Simplified vertices:', turf.explode(simplified).features.length);
             } catch (error) {
                 console.error('Error simplifying boundary:', error);
                 alert('Error processing boundary file. Please try a simpler geometry.');
@@ -168,9 +181,18 @@ createApp({
             this.isPlaying = true;
             this.currentDate = new Date(this.startDate);
             this.pestProgress = 0;
-            this.accumulatedDetections.clear(); // Clear accumulated detections when starting new simulation
-            this.generateObservations();
-            this.animate();
+            this.accumulatedDetections.clear();
+            this.simulationComplete = false;
+            this.showStats = false;
+            
+            // Show loading spinner
+            this.isLoading = true;
+            
+            setTimeout(() => {
+                this.generateObservations();
+                this.isLoading = false;
+                this.animate();
+            }, 0);
         },
 
         generateObservations() {
@@ -222,7 +244,47 @@ createApp({
                 requestAnimationFrame(this.animate);
             } else {
                 this.isPlaying = false;
+                this.simulationComplete = true;
+                this.showStats = true;  // Automatically show stats when simulation ends
             }
+        },
+
+        updateStats() {
+            const bbox = turf.bbox(this.boundary);
+            const totalArea = turf.area(this.boundary) / 1000000; // km²
+            const spreadLng = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
+            
+            // Calculate pest-affected area
+            const pestPolygon = turf.polygon([[
+                [bbox[0], bbox[1]],
+                [spreadLng, bbox[1]],
+                [spreadLng, bbox[3]],
+                [bbox[0], bbox[3]],
+                [bbox[0], bbox[1]]
+            ]]);
+            const pestArea = turf.area(pestPolygon) / 1000000; // km²
+
+            // Count observations in pest-affected area
+            const observationsInPestArea = this.observations.filter(obs => 
+                obs.date <= this.currentDate && 
+                obs.coordinates[0] <= spreadLng
+            ).length;
+
+            // Count successful detections
+            const successfulDetections = this.accumulatedDetections.size;
+
+            // Update statistics
+            this.stats = {
+                totalObservations: this.observations.length,
+                totalDetections: successfulDetections,
+                detectionRate: observationsInPestArea > 0 ? 
+                    ((successfulDetections / observationsInPestArea) * 100).toFixed(1) : '0.0',
+                pestArea: Math.round(pestArea),
+                coveragePercent: ((successfulDetections / Math.max(1, pestArea)) * 100).toFixed(1),
+                daysToFirstDetection: this.stats.daysToFirstDetection,
+                avgDetectionsPerDay: (successfulDetections / 
+                    Math.max(1, Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24)))).toFixed(1)
+            };
         },
 
         updateDisplay() {
@@ -265,8 +327,12 @@ createApp({
                 const isPestPresent = obs.coordinates[0] <= spreadLng;
                 const isDetected = isPestPresent && Math.random() * 100 <= this.detectionRate;
                 if (isDetected) {
-                    // Store detection in accumulated set using stringified coordinates as key
                     this.accumulatedDetections.add(JSON.stringify(obs.coordinates));
+                    // Record first detection
+                    if (this.stats.daysToFirstDetection === null) {
+                        this.stats.daysToFirstDetection = 
+                            Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24));
+                    }
                 }
                 return isDetected;
             });
@@ -287,6 +353,57 @@ createApp({
             if (newDetections.length > 0) {
                 console.log(`Day ${this.currentDate.toLocaleDateString()}: ${newDetections.length} new detections, ${this.accumulatedDetections.size} total`);
             }
+
+            // Update statistics
+            this.updateStats();
+        },
+
+        resetSimulation() {
+            // Stop animation if running
+            this.isPlaying = false;
+            
+            // Reset date
+            this.currentDate = new Date(this.startDate);
+            
+            // Reset progress and stats
+            this.pestProgress = 0;
+            this.accumulatedDetections.clear();
+            this.simulationComplete = false;
+            this.showStats = false;
+            
+            // Reset observations array
+            this.observations = [];
+            
+            // Reset map sources
+            this.map.getSource('pest-spread').setData({
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: []
+                }
+            });
+            
+            this.map.getSource('observations').setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+            
+            this.map.getSource('detections').setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+            
+            // Reset statistics
+            this.stats = {
+                totalObservations: 0,
+                totalDetections: 0,
+                detectionRate: 0,
+                pestArea: 0,
+                coveragePercent: 0,
+                daysToFirstDetection: null,
+                avgDetectionsPerDay: 0,
+                detectionsByWeek: []
+            };
         }
     }
 }).mount('#app') 

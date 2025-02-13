@@ -127,3 +127,170 @@ input[type="file"] {
     margin-right: 5px;
     border-radius: 50%;
 } 
+
+.loading-spinner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.statistics-panel {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.statistics-panel h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.stat-item {
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.stat-item label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.stat-item span {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+.stats-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: white;
+    padding: 20px;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.2);
+    width: 300px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+}
+
+.stats-panel-open {
+    transform: translateX(0);
+}
+
+.stats-header {
+    position: sticky;
+    top: 0;
+    background: white;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.stats-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+}
+
+.close-stats {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-stats:hover {
+    color: #333;
+    background: #f5f5f5;
+    border-radius: 50%;
+}
+
+.stats-toggle {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    background: #2196F3;
+    z-index: 1000;
+    width: auto;
+    padding: 8px 16px;
+    opacity: 0; /* Hide initially */
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.stats-toggle.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.stats-toggle:hover {
+    background: #1976D2;
+}
+
+/* Update existing stat-grid styles */
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.stat-item {
+    background: #f5f5f5;
+    padding: 12px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stat-item label {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+.stat-item span {
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
