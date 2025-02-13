@@ -30,6 +30,7 @@ createApp({
             },
             showStats: false,  // Controls statistics panel visibility
             simulationComplete: false,  // Add this new property
+            invasionDirection: 'west', // Add this new property
         }
     },
 
@@ -288,23 +289,74 @@ createApp({
         },
 
         updateDisplay() {
-            // Update pest spread area
+            // Update pest spread area based on direction
             const bbox = turf.bbox(this.boundary);
-            const spreadLng = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
+            let pestPolygon;
             
+            switch(this.invasionDirection) {
+                case 'west':
+                    const spreadLngW = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
+                    pestPolygon = [[
+                        [bbox[0], bbox[1]],
+                        [spreadLngW, bbox[1]],
+                        [spreadLngW, bbox[3]],
+                        [bbox[0], bbox[3]],
+                        [bbox[0], bbox[1]]
+                    ]];
+                    break;
+                case 'east':
+                    const spreadLngE = bbox[2] - (bbox[2] - bbox[0]) * this.pestProgress;
+                    pestPolygon = [[
+                        [bbox[2], bbox[1]],
+                        [spreadLngE, bbox[1]],
+                        [spreadLngE, bbox[3]],
+                        [bbox[2], bbox[3]],
+                        [bbox[2], bbox[1]]
+                    ]];
+                    break;
+                case 'north':
+                    const spreadLatN = bbox[3] - (bbox[3] - bbox[1]) * this.pestProgress;
+                    pestPolygon = [[
+                        [bbox[0], bbox[3]],
+                        [bbox[2], bbox[3]],
+                        [bbox[2], spreadLatN],
+                        [bbox[0], spreadLatN],
+                        [bbox[0], bbox[3]]
+                    ]];
+                    break;
+                case 'south':
+                    const spreadLatS = bbox[1] + (bbox[3] - bbox[1]) * this.pestProgress;
+                    pestPolygon = [[
+                        [bbox[0], bbox[1]],
+                        [bbox[2], bbox[1]],
+                        [bbox[2], spreadLatS],
+                        [bbox[0], spreadLatS],
+                        [bbox[0], bbox[1]]
+                    ]];
+                    break;
+            }
+
             this.map.getSource('pest-spread').setData({
                 type: 'Feature',
                 geometry: {
                     type: 'Polygon',
-                    coordinates: [[
-                        [bbox[0], bbox[1]],
-                        [spreadLng, bbox[1]],
-                        [spreadLng, bbox[3]],
-                        [bbox[0], bbox[3]],
-                        [bbox[0], bbox[1]]
-                    ]]
+                    coordinates: pestPolygon
                 }
             });
+
+            // Update detection logic to check correct direction
+            const isPestPresent = (coordinates) => {
+                switch(this.invasionDirection) {
+                    case 'west':
+                        return coordinates[0] <= bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
+                    case 'east':
+                        return coordinates[0] >= bbox[2] - (bbox[2] - bbox[0]) * this.pestProgress;
+                    case 'north':
+                        return coordinates[1] >= bbox[3] - (bbox[3] - bbox[1]) * this.pestProgress;
+                    case 'south':
+                        return coordinates[1] <= bbox[1] + (bbox[3] - bbox[1]) * this.pestProgress;
+                }
+            };
 
             // Show observations for current day
             const currentObs = this.observations.filter(obs => 
@@ -324,11 +376,9 @@ createApp({
 
             // Check for new detections
             const newDetections = currentObs.filter(obs => {
-                const isPestPresent = obs.coordinates[0] <= spreadLng;
-                const isDetected = isPestPresent && Math.random() * 100 <= this.detectionRate;
+                const isDetected = isPestPresent(obs.coordinates) && Math.random() * 100 <= this.detectionRate;
                 if (isDetected) {
                     this.accumulatedDetections.add(JSON.stringify(obs.coordinates));
-                    // Record first detection
                     if (this.stats.daysToFirstDetection === null) {
                         this.stats.daysToFirstDetection = 
                             Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24));

@@ -50,6 +50,16 @@
                 <span>{{ detectionRate }}%</span>
             </div>
 
+            <div class="control-group">
+                <label>Invasion Direction</label>
+                <select v-model="invasionDirection" :disabled="isPlaying">
+                    <option value="west">From West</option>
+                    <option value="east">From East</option>
+                    <option value="north">From North</option>
+                    <option value="south">From South</option>
+                </select>
+            </div>
+
             <!-- Date controls -->
             <div class="control-group">
                 <label>Start Date</label>
@@ -96,7 +106,6 @@
             <div class="stats-panel" :class="{ 'stats-panel-open': showStats }">
                 <div class="stats-header">
                     <h3>Simulation Statistics</h3>
-                    <button class="close-stats" @click="showStats = false">&times;</button>
                 </div>
                 <div class="stat-grid" v-if="observations.length > 0">
                     <div class="stat-item">
