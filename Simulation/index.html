@@ -16,6 +16,13 @@
 </head>
 <body>
     <div id="app">
+        <!-- Add initial loading overlay -->
+        <div v-if="!defaultBoundaryLoaded" class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h3>Loading Application...</h3>
+            </div>
+        </div>
         <div id="map"></div>
         <div v-if="isGeneratingPoints" class="loading-overlay">
             <div class="loading-content">
@@ -135,6 +142,14 @@
                     <div class="progress-fill" :style="{ width: precompileProgress + '%' }"></div>
                 </div>
                 <p>{{ Math.round(precompileProgress) }}% complete</p>
+            </div>
+        </div>
+        <div class="controls">
+            <div v-if="simulationStatus" class="simulation-status">
+                <div class="progress-bar">
+                    <div :style="{ width: simulationProgress + '%' }" class="progress-fill"></div>
+                </div>
+                <div class="status-text">{{ simulationStatus }}</div>
             </div>
         </div>
     </div>

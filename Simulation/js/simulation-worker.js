@@ -11,116 +11,91 @@ console.log('Worker variables initialized');
 self.onmessage = function(e) {
     console.log('Worker received message:', e.data.type);
     
-    try {
-        if (e.data.type === 'init') {
-            config = e.data.config;
-            console.log('Worker initialized with config:', config);
-            // Start processing immediately with points from config
-            processSimulation(config.observationPoints);
+    if (e.data.type === 'init') {
+        try {
+            const results = runSimulation(e.data.config);
+            self.postMessage({ 
+                type: 'complete', 
+                results: results 
+            });
+        } catch (error) {
+            self.postMessage({ 
+                type: 'error', 
+                error: error.toString() 
+            });
         }
-    } catch (error) {
-        console.error('Worker message error:', error);
-        self.postMessage({
-            type: 'error',
-            error: error.toString()
-        });
     }
 };
 
-function processSimulation(points) {
-    console.log('Starting simulation processing');
-    try {
-        const { startDate, endDate, bounds, taxonomicalLikelihood } = config;
-        const stepSize = 43200000; // Half day in milliseconds
-        const totalSteps = Math.ceil((endDate - startDate) / stepSize);
-        
-        console.log(`Processing ${totalSteps} steps`);
-        
-        let currentTime = startDate;
-        let results = [];
-        let allDetections = new Map();
-
-        points.sort((a, b) => a.timestamp - b.timestamp);
-        console.log('Points sorted');
-
-        for (let step = 0; step < totalSteps; step++) {
-            // Send progress updates more frequently (every 20 steps)
-            if (step % 20 === 0) {
-                self.postMessage({
-                    type: 'progress',
-                    progress: (step / totalSteps) * 100
-                });
-            }
-
-            const progress = step / totalSteps;
-            const currentPoints = points.filter(point => 
-                point.timestamp <= currentTime &&
-                point.timestamp > currentTime - (2 * 24 * 60 * 60 * 1000)
-            );
-
-            const spreadLng = bounds.minLng + ((bounds.maxLng - bounds.minLng) * progress);
-            
-            currentPoints.forEach(point => {
-                if (!allDetections.has(point.id)) {
-                    const isInSpreadArea = point.lng <= spreadLng;
-                    const isDetected = isInSpreadArea && (Math.random() * 100 <= taxonomicalLikelihood);
-                    allDetections.set(point.id, { isDetected, timestamp: point.timestamp });
-                }
-            });
-
-            const detectedPoints = points.filter(point => 
-                allDetections.has(point.id) &&
-                allDetections.get(point.id).isDetected &&
-                point.timestamp <= currentTime
-            );
-
-            // Convert points to GeoJSON format
-            results.push({
-                timestamp: currentTime,
-                currentPoints: currentPoints.map(point => ({
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Point',
-                        coordinates: [point.lng, point.lat]
-                    },
-                    properties: {
-                        id: point.id,
-                        timestamp: point.timestamp
-                    }
-                })),
-                detectedPoints: detectedPoints.map(point => ({
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Point',
-                        coordinates: [point.lng, point.lat]
-                    },
-                    properties: {
-                        id: point.id,
-                        timestamp: point.timestamp
-                    }
-                }))
-            });
-
-            currentTime += stepSize;
-        }
-
-        // Send final progress update
-        self.postMessage({
-            type: 'progress',
-            progress: 100
-        });
-
-        console.log('Simulation complete, sending results');
-        self.postMessage({
-            type: 'complete',
-            results: results
-        });
-
-    } catch (error) {
-        console.error('Simulation processing error:', error);
-        self.postMessage({
-            type: 'error',
-            error: error.toString()
-        });
+function runSimulation(config) {
+    // Ensure all inputs are primitive values
+    const startDate = Number(config.startDate);
+    const endDate = Number(config.endDate);
+    const minLng = Number(config.bounds.minLng);
+    const maxLng = Number(config.bounds.maxLng);
+    const minLat = Number(config.bounds.minLat);
+    const maxLat = Number(config.bounds.maxLat);
+    const taxonomicalLikelihood = Number(config.taxonomicalLikelihood);
+    const area = Number(config.area);
+    
+    // Generate points
+    const monthsInSimulation = (endDate - startDate) / (1000 * 60 * 60 * 24 * 30);
+    const observationsPerMonth = Math.ceil(area / 100);
+    const totalObservations = Math.ceil(observationsPerMonth * monthsInSimulation);
+    
+    // Create points as a typed array for better performance and guaranteed cloning
+    const observations = new Float64Array(totalObservations * 3); // lng, lat, timestamp for each point
+    
+    for (let i = 0; i < totalObservations; i++) {
+        const idx = i * 3;
+        observations[idx] = minLng + Math.random() * (maxLng - minLng);     // lng
+        observations[idx + 1] = minLat + Math.random() * (maxLat - minLat); // lat
+        observations[idx + 2] = startDate + Math.random() * (endDate - startDate); // timestamp
     }
+    
+    // Generate weekly steps
+    const weekInMs = 7 * 24 * 60 * 60 * 1000;
+    const steps = Math.ceil((endDate - startDate) / weekInMs);
+    
+    // Create results as transferable arrays
+    const timeStamps = new Float64Array(steps);
+    const observationCoords = new Array(steps);
+    const detectionCoords = new Array(steps);
+    
+    for (let step = 0; step < steps; step++) {
+        const currentTime = startDate + (step * weekInMs);
+        const progress = step / steps;
+        const spreadLng = minLng + ((maxLng - minLng) * progress);
+        
+        timeStamps[step] = currentTime;
+        
+        // Filter observations for this week
+        const weekObs = [];
+        const detections = [];
+        
+        for (let i = 0; i < totalObservations; i++) {
+            const idx = i * 3;
+            const timestamp = observations[idx + 2];
+            
+            if (timestamp <= currentTime && timestamp > currentTime - weekInMs) {
+                const lng = observations[idx];
+                const lat = observations[idx + 1];
+                weekObs.push([lng, lat]);
+                
+                if (lng <= spreadLng && Math.random() * 100 <= taxonomicalLikelihood) {
+                    detections.push([lng, lat]);
+                }
+            }
+        }
+        
+        observationCoords[step] = weekObs;
+        detectionCoords[step] = detections;
+    }
+    
+    // Return a structured object that can be cloned
+    return {
+        timeStamps: Array.from(timeStamps),
+        observations: observationCoords,
+        detections: detectionCoords
+    };
 } 
