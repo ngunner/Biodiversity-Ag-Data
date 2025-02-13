@@ -289,62 +289,135 @@ createApp({
         },
 
         updateDisplay() {
-            // Update pest spread area based on direction
             const bbox = turf.bbox(this.boundary);
+            const minX = bbox[0],
+                  minY = bbox[1],
+                  maxX = bbox[2],
+                  maxY = bbox[3];
             let pestPolygon;
-            
-            switch(this.invasionDirection) {
-                case 'west':
-                    const spreadLngW = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
-                    pestPolygon = [[
-                        [bbox[0], bbox[1]],
-                        [spreadLngW, bbox[1]],
-                        [spreadLngW, bbox[3]],
-                        [bbox[0], bbox[3]],
-                        [bbox[0], bbox[1]]
-                    ]];
-                    break;
-                case 'east':
-                    const spreadLngE = bbox[2] - (bbox[2] - bbox[0]) * this.pestProgress;
-                    pestPolygon = [[
-                        [bbox[2], bbox[1]],
-                        [spreadLngE, bbox[1]],
-                        [spreadLngE, bbox[3]],
-                        [bbox[2], bbox[3]],
-                        [bbox[2], bbox[1]]
-                    ]];
-                    break;
-                case 'north':
-                    const spreadLatN = bbox[3] - (bbox[3] - bbox[1]) * this.pestProgress;
-                    pestPolygon = [[
-                        [bbox[0], bbox[3]],
-                        [bbox[2], bbox[3]],
-                        [bbox[2], spreadLatN],
-                        [bbox[0], spreadLatN],
-                        [bbox[0], bbox[3]]
-                    ]];
-                    break;
-                case 'south':
-                    const spreadLatS = bbox[1] + (bbox[3] - bbox[1]) * this.pestProgress;
-                    pestPolygon = [[
-                        [bbox[0], bbox[1]],
-                        [bbox[2], bbox[1]],
-                        [bbox[2], spreadLatS],
-                        [bbox[0], spreadLatS],
-                        [bbox[0], bbox[1]]
-                    ]];
-                    break;
+          
+            switch (this.invasionDirection) {
+              case 'west': {
+                const spreadLng = minX + (maxX - minX) * this.pestProgress;
+                pestPolygon = [[
+                  [minX, minY],
+                  [spreadLng, minY],
+                  [spreadLng, maxY],
+                  [minX, maxY],
+                  [minX, minY]
+                ]];
+                break;
+              }
+              case 'east': {
+                const spreadLng = maxX - (maxX - minX) * this.pestProgress;
+                pestPolygon = [[
+                  [maxX, minY],
+                  [spreadLng, minY],
+                  [spreadLng, maxY],
+                  [maxX, maxY],
+                  [maxX, minY]
+                ]];
+                break;
+              }
+              case 'north': {
+                const spreadLat = maxY - (maxY - minY) * this.pestProgress;
+                pestPolygon = [[
+                  [minX, maxY],
+                  [maxX, maxY],
+                  [maxX, spreadLat],
+                  [minX, spreadLat],
+                  [minX, maxY]
+                ]];
+                break;
+              }
+              case 'south': {
+                const spreadLat = minY + (maxY - minY) * this.pestProgress;
+                pestPolygon = [[
+                  [minX, minY],
+                  [maxX, minY],
+                  [maxX, spreadLat],
+                  [minX, spreadLat],
+                  [minX, minY]
+                ]];
+                break;
+              }
+              case 'northeast': {
+                // Anchor: top-right [maxX, maxY]
+                // Lower-left point moves from [maxX, maxY] to [minX, minY] as progress goes from 0 to 1.
+                const lowerLeft = [
+                  maxX - (maxX - minX) * this.pestProgress,
+                  maxY - (maxY - minY) * this.pestProgress
+                ];
+                // Build rectangle using standard (clockwise) order: bottom-left, bottom-right, top-right, top-left.
+                pestPolygon = [[
+                  lowerLeft,
+                  [maxX, lowerLeft[1]],
+                  [maxX, maxY],
+                  [lowerLeft[0], maxY],
+                  lowerLeft
+                ]];
+                break;
+              }
+              case 'northwest': {
+                // Anchor: top-left [minX, maxY]
+                // Lower-right point moves from [minX, maxY] to [maxX, minY]
+                const lowerRight = [
+                  minX + (maxX - minX) * this.pestProgress,
+                  maxY - (maxY - minY) * this.pestProgress
+                ];
+                // Build rectangle from bottom-left to top-right:
+                pestPolygon = [[
+                  [minX, lowerRight[1]],
+                  lowerRight,
+                  [lowerRight[0], maxY],
+                  [minX, maxY],
+                  [minX, lowerRight[1]]
+                ]];
+                break;
+              }
+              case 'southeast': {
+                // Anchor: bottom-right [maxX, minY]
+                // Upper-left point moves from [maxX, minY] to [minX, maxY]
+                const upperLeft = [
+                  maxX - (maxX - minX) * this.pestProgress,
+                  minY + (maxY - minY) * this.pestProgress
+                ];
+                pestPolygon = [[
+                  [upperLeft[0], minY],
+                  [maxX, minY],
+                  [maxX, upperLeft[1]],
+                  [upperLeft[0], upperLeft[1]],
+                  [upperLeft[0], minY]
+                ]];
+                break;
+              }
+              case 'southwest': {
+                // Anchor: bottom-left [minX, minY]
+                // Upper-right point moves from [minX, minY] to [maxX, maxY]
+                const upperRight = [
+                  minX + (maxX - minX) * this.pestProgress,
+                  minY + (maxY - minY) * this.pestProgress
+                ];
+                pestPolygon = [[
+                  [minX, minY],
+                  [upperRight[0], minY],
+                  [upperRight[0], upperRight[1]],
+                  [minX, upperRight[1]],
+                  [minX, minY]
+                ]];
+                break;
+              }
             }
-
+          
             this.map.getSource('pest-spread').setData({
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: pestPolygon
-                }
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: pestPolygon
+              }
             });
 
-            // Update detection logic to check correct direction
+            // Update detection logic
             const isPestPresent = (coordinates) => {
                 switch(this.invasionDirection) {
                     case 'west':
@@ -355,6 +428,30 @@ createApp({
                         return coordinates[1] >= bbox[3] - (bbox[3] - bbox[1]) * this.pestProgress;
                     case 'south':
                         return coordinates[1] <= bbox[1] + (bbox[3] - bbox[1]) * this.pestProgress;
+                    case 'northeast':
+                        const distFromNE = Math.max(
+                            (bbox[2] - coordinates[0]) / (bbox[2] - bbox[0]),
+                            (bbox[3] - coordinates[1]) / (bbox[3] - bbox[1])
+                        );
+                        return distFromNE <= this.pestProgress;
+                    case 'northwest':
+                        const distFromNW = Math.max(
+                            (coordinates[0] - bbox[0]) / (bbox[2] - bbox[0]),
+                            (bbox[3] - coordinates[1]) / (bbox[3] - bbox[1])
+                        );
+                        return distFromNW <= this.pestProgress;
+                    case 'southeast':
+                        const distFromSE = Math.max(
+                            (bbox[2] - coordinates[0]) / (bbox[2] - bbox[0]),
+                            (coordinates[1] - bbox[1]) / (bbox[3] - bbox[1])
+                        );
+                        return distFromSE <= this.pestProgress;
+                    case 'southwest':
+                        const distFromSW = Math.max(
+                            (coordinates[0] - bbox[0]) / (bbox[2] - bbox[0]),
+                            (coordinates[1] - bbox[1]) / (bbox[3] - bbox[1])
+                        );
+                        return distFromSW <= this.pestProgress;
                 }
             };
 
