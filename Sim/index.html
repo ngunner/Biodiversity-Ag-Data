@@ -142,6 +142,25 @@
                     </div>
                 </div>
             </div>
+
+            <div v-if="simulationComplete" class="playhead-controls">
+                <button @click="replaySimulation" :disabled="isReplaying">
+                    Play
+                </button>
+                <button @click="stopReplay" :disabled="!isReplaying">
+                    Stop
+                </button>
+                <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    step="0.1"
+                    :value="playheadPosition"
+                    @input="handlePlayheadChange($event)"
+                    :disabled="isReplaying"
+                >
+                <span>{{ currentDate.toLocaleDateString() }}</span>
+            </div>
         </div>
         <div v-if="isLoading" class="loading-spinner">
             <div class="spinner"></div>

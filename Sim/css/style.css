@@ -309,3 +309,34 @@ input[type="file"] {
     background: #f5f5f5;
     cursor: not-allowed;
 }
+
+.playhead-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playhead-controls input[type="range"] {
+  width: 300px;
+}
+
+.playhead-controls button {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.playhead-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

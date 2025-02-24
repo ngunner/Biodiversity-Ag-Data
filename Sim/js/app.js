@@ -31,6 +31,15 @@ createApp({
             showStats: false,  // Controls statistics panel visibility
             simulationComplete: false,  // Add this new property
             invasionDirection: 'west', // Add this new property
+            firstDetection: {
+                date: null,
+                coordinates: null
+            },
+            playheadPosition: 0, // 0 to 100
+            isReplaying: false,
+            simulationData: [], // Will store state at each timestep
+            spreadRate: 100, // Added for the new pest spread calculation
+            originPoint: [0, 0], // Added for the new pest spread calculation
         }
     },
 
@@ -121,6 +130,25 @@ createApp({
                     'circle-stroke-color': '#fff'
                 }
             });
+
+            // Add new layer for first detection marker
+            this.map.addLayer({
+                id: 'first-detection',
+                type: 'circle',
+                source: {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: []
+                    }
+                },
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#ff0000',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
         },
 
         async loadBoundary(file) {
@@ -179,12 +207,25 @@ createApp({
                 return;
             }
 
+            // Validate origin point
+            if (!this.originPoint || !Array.isArray(this.originPoint) || this.originPoint.length !== 2) {
+                console.error('Invalid origin point:', this.originPoint);
+                alert('Invalid origin point configuration');
+                return;
+            }
+
             this.isPlaying = true;
             this.currentDate = new Date(this.startDate);
             this.pestProgress = 0;
             this.accumulatedDetections.clear();
             this.simulationComplete = false;
             this.showStats = false;
+            this.playheadPosition = 0;
+            this.simulationData = [];
+            this.firstDetection = {
+                date: null,
+                coordinates: null
+            };
             
             // Show loading spinner
             this.isLoading = true;
@@ -231,12 +272,72 @@ createApp({
         },
 
         animate() {
-            if (!this.isPlaying) return;
+            if (!this.isPlaying || !this.boundary) return;
 
             // Update pest spread
             const totalDuration = this.endDate - this.startDate;
             this.pestProgress = (this.currentDate - this.startDate) / totalDuration;
+            
+            // Calculate current boundary state with detailed safety checks
+            const boundaryState = this.boundary.features.map(feature => {
+                try {
+                    if (!feature.geometry?.coordinates?.[0]?.[0]) {
+                        console.warn('Invalid feature geometry:', feature);
+                        return feature;
+                    }
+
+                    const coordinates = feature.geometry.coordinates[0][0];
+                    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+                        console.warn('Invalid coordinates format:', coordinates);
+                        return feature;
+                    }
+
+                    if (!this.originPoint) {
+                        console.warn('Origin point not set');
+                        return feature;
+                    }
+
+                    const dist = this.distance(coordinates, this.originPoint);
+                    const progress = Math.max(0, Math.min(1, 
+                        1 - (dist / (this.spreadRate * this.pestProgress))
+                    ));
+
+                    return {
+                        type: 'Feature',
+                        geometry: feature.geometry,
+                        properties: {
+                            ...feature.properties,
+                            pestProgress: progress
+                        }
+                    };
+                } catch (error) {
+                    console.error('Error processing feature:', error, feature);
+                    return feature;
+                }
+            });
+
+            // Update the display
             this.updateDisplay();
+
+            // Store state for replay
+            this.simulationData.push({
+                date: new Date(this.currentDate),
+                pestProgress: this.pestProgress,
+                observations: this.observations.filter(obs => 
+                    obs.date.toDateString() === this.currentDate.toDateString()
+                ),
+                detections: Array.from(this.accumulatedDetections).map(coordStr => JSON.parse(coordStr)),
+                boundaryState: boundaryState,
+                firstDetection: this.firstDetection ? { ...this.firstDetection } : null
+            });
+
+            // Update boundary visualization with safety check
+            if (this.map && this.map.getSource('boundary')) {
+                this.map.getSource('boundary').setData({
+                    type: 'FeatureCollection',
+                    features: boundaryState
+                });
+            }
 
             // Advance time by one day
             this.currentDate = new Date(this.currentDate.getTime() + 24 * 60 * 60 * 1000);
@@ -246,49 +347,17 @@ createApp({
             } else {
                 this.isPlaying = false;
                 this.simulationComplete = true;
-                this.showStats = true;  // Automatically show stats when simulation ends
+                this.showStats = true;
             }
         },
 
-        updateStats() {
-            const bbox = turf.bbox(this.boundary);
-            const totalArea = turf.area(this.boundary) / 1000000; // km²
-            const spreadLng = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
-            
-            // Calculate pest-affected area
-            const pestPolygon = turf.polygon([[
-                [bbox[0], bbox[1]],
-                [spreadLng, bbox[1]],
-                [spreadLng, bbox[3]],
-                [bbox[0], bbox[3]],
-                [bbox[0], bbox[1]]
-            ]]);
-            const pestArea = turf.area(pestPolygon) / 1000000; // km²
-
-            // Count observations in pest-affected area
-            const observationsInPestArea = this.observations.filter(obs => 
-                obs.date <= this.currentDate && 
-                obs.coordinates[0] <= spreadLng
-            ).length;
-
-            // Count successful detections
-            const successfulDetections = this.accumulatedDetections.size;
-
-            // Update statistics
-            this.stats = {
-                totalObservations: this.observations.length,
-                totalDetections: successfulDetections,
-                detectionRate: observationsInPestArea > 0 ? 
-                    ((successfulDetections / observationsInPestArea) * 100).toFixed(1) : '0.0',
-                pestArea: Math.round(pestArea),
-                coveragePercent: ((successfulDetections / Math.max(1, pestArea)) * 100).toFixed(1),
-                daysToFirstDetection: this.stats.daysToFirstDetection,
-                avgDetectionsPerDay: (successfulDetections / 
-                    Math.max(1, Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24)))).toFixed(1)
-            };
-        },
-
         updateDisplay() {
+            // Skip detection logic if we're just replaying
+            if (this.simulationComplete) {
+                this.updatePestSpread();
+                return;
+            }
+
             const bbox = turf.bbox(this.boundary);
             const minX = bbox[0],
                   minY = bbox[1],
@@ -476,9 +545,24 @@ createApp({
                 const isDetected = isPestPresent(obs.coordinates) && Math.random() * 100 <= this.detectionRate;
                 if (isDetected) {
                     this.accumulatedDetections.add(JSON.stringify(obs.coordinates));
-                    if (this.stats.daysToFirstDetection === null) {
+                    // Track first detection
+                    if (this.stats.daysToFirstDetection === null && this.accumulatedDetections.size === 1) {
                         this.stats.daysToFirstDetection = 
                             Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24));
+                        this.firstDetection.date = new Date(this.currentDate);
+                        this.firstDetection.coordinates = obs.coordinates;
+                        
+                        // Update first detection marker
+                        this.map.getSource('first-detection').setData({
+                            type: 'FeatureCollection',
+                            features: [{
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: obs.coordinates
+                                }
+                            }]
+                        });
                     }
                 }
                 return isDetected;
@@ -503,6 +587,295 @@ createApp({
 
             // Update statistics
             this.updateStats();
+        },
+
+        calculateFeaturePestProgress(feature) {
+            return Math.max(0, Math.min(1, 
+                1 - (this.distance(feature.geometry.coordinates[0][0], this.originPoint) 
+                    / (this.spreadRate * this.pestProgress))
+            ));
+        },
+
+        updateStats() {
+            const bbox = turf.bbox(this.boundary);
+            const totalArea = turf.area(this.boundary) / 1000000; // km²
+            const spreadLng = bbox[0] + (bbox[2] - bbox[0]) * this.pestProgress;
+            
+            // Calculate pest-affected area
+            const pestPolygon = turf.polygon([[
+                [bbox[0], bbox[1]],
+                [spreadLng, bbox[1]],
+                [spreadLng, bbox[3]],
+                [bbox[0], bbox[3]],
+                [bbox[0], bbox[1]]
+            ]]);
+            const pestArea = turf.area(pestPolygon) / 1000000; // km²
+
+            // Count observations in pest-affected area
+            const observationsInPestArea = this.observations.filter(obs => 
+                obs.date <= this.currentDate && 
+                obs.coordinates[0] <= spreadLng
+            ).length;
+
+            // Count successful detections
+            const successfulDetections = this.accumulatedDetections.size;
+
+            // Update statistics
+            this.stats = {
+                totalObservations: this.observations.length,
+                totalDetections: successfulDetections,
+                detectionRate: observationsInPestArea > 0 ? 
+                    ((successfulDetections / observationsInPestArea) * 100).toFixed(1) : '0.0',
+                pestArea: Math.round(pestArea),
+                coveragePercent: ((successfulDetections / Math.max(1, pestArea)) * 100).toFixed(1),
+                daysToFirstDetection: this.stats.daysToFirstDetection,
+                avgDetectionsPerDay: (successfulDetections / 
+                    Math.max(1, Math.ceil((this.currentDate - this.startDate) / (1000 * 60 * 60 * 24)))).toFixed(1)
+            };
+        },
+
+        handlePlayheadChange(event) {
+            if (!this.simulationComplete || !this.simulationData.length || !this.map) return;
+            
+            this.playheadPosition = parseFloat(event.target.value);
+            const index = Math.floor((this.simulationData.length - 1) * (this.playheadPosition / 100));
+            const state = this.simulationData[index];
+            
+            this.currentDate = new Date(state.date);
+            this.pestProgress = state.pestProgress;
+            
+            // Update accumulated detections to match the state at this point
+            this.accumulatedDetections = new Set(state.detections.map(coords => JSON.stringify(coords)));
+            
+            // Update first detection marker based on current date
+            if (this.map.getSource('first-detection')) {
+                const shouldShowFirstDetection = this.firstDetection && 
+                    this.firstDetection.date && 
+                    this.currentDate >= this.firstDetection.date;
+
+                this.map.getSource('first-detection').setData({
+                    type: 'FeatureCollection',
+                    features: shouldShowFirstDetection ? [{
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: this.firstDetection.coordinates
+                        }
+                    }] : []
+                });
+            }
+
+            // Update observations
+            if (this.map.getSource('observations')) {
+                this.map.getSource('observations').setData({
+                    type: 'FeatureCollection',
+                    features: state.observations.map(obs => ({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: obs.coordinates
+                        }
+                    }))
+                });
+            }
+
+            // Update detections
+            if (this.map.getSource('detections')) {
+                this.map.getSource('detections').setData({
+                    type: 'FeatureCollection',
+                    features: state.detections.map(coords => ({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: coords
+                        }
+                    }))
+                });
+            }
+
+            // Update pest spread visualization
+            this.updatePestSpread(state.pestProgress);
+        },
+
+        // updatePestSpread(progress) {
+        //     if (!this.map || !this.map.getSource('pest-spread')) return;
+            
+        //     const point = {
+        //         type: 'Feature',
+        //         geometry: {
+        //             type: 'Point',
+        //             coordinates: this.originPoint
+        //         },
+        //         properties: {
+        //             radius: this.spreadRate * progress
+        //         }
+        //     };
+
+        //     this.map.getSource('pest-spread').setData({
+        //         type: 'FeatureCollection',
+        //         features: [point]
+        //     });
+        // },
+
+        updatePestSpread(progress) {
+          // If no progress is passed in, default to the current this.pestProgress
+          if (progress === undefined) {
+            progress = this.pestProgress;
+          }
+        
+          // Safety checks
+          if (!this.map || !this.map.getSource('pest-spread') || !this.boundary) return;
+        
+          // Get bounding box of your current boundary
+          const bbox = turf.bbox(this.boundary);
+          const minX = bbox[0];
+          const minY = bbox[1];
+          const maxX = bbox[2];
+          const maxY = bbox[3];
+        
+          let pestPolygon;
+          switch (this.invasionDirection) {
+            case 'west': {
+              const spreadLng = minX + (maxX - minX) * progress;
+              pestPolygon = [[
+                [minX, minY],
+                [spreadLng, minY],
+                [spreadLng, maxY],
+                [minX, maxY],
+                [minX, minY]
+              ]];
+              break;
+            }
+            case 'east': {
+              const spreadLng = maxX - (maxX - minX) * progress;
+              pestPolygon = [[
+                [maxX, minY],
+                [spreadLng, minY],
+                [spreadLng, maxY],
+                [maxX, maxY],
+                [maxX, minY]
+              ]];
+              break;
+            }
+            case 'north': {
+              const spreadLat = maxY - (maxY - minY) * progress;
+              pestPolygon = [[
+                [minX, maxY],
+                [maxX, maxY],
+                [maxX, spreadLat],
+                [minX, spreadLat],
+                [minX, maxY]
+              ]];
+              break;
+            }
+            case 'south': {
+              const spreadLat = minY + (maxY - minY) * progress;
+              pestPolygon = [[
+                [minX, minY],
+                [maxX, minY],
+                [maxX, spreadLat],
+                [minX, spreadLat],
+                [minX, minY]
+              ]];
+              break;
+            }
+            case 'northeast': {
+              // Anchor: top-right [maxX, maxY]
+              const lowerLeft = [
+                maxX - (maxX - minX) * progress,
+                maxY - (maxY - minY) * progress
+              ];
+              pestPolygon = [[
+                lowerLeft,
+                [maxX, lowerLeft[1]],
+                [maxX, maxY],
+                [lowerLeft[0], maxY],
+                lowerLeft
+              ]];
+              break;
+            }
+            case 'northwest': {
+              // Anchor: top-left [minX, maxY]
+              const lowerRight = [
+                minX + (maxX - minX) * progress,
+                maxY - (maxY - minY) * progress
+              ];
+              pestPolygon = [[
+                [minX, lowerRight[1]],
+                lowerRight,
+                [lowerRight[0], maxY],
+                [minX, maxY],
+                [minX, lowerRight[1]]
+              ]];
+              break;
+            }
+            case 'southeast': {
+              // Anchor: bottom-right [maxX, minY]
+              const upperLeft = [
+                maxX - (maxX - minX) * progress,
+                minY + (maxY - minY) * progress
+              ];
+              pestPolygon = [[
+                [upperLeft[0], minY],
+                [maxX, minY],
+                [maxX, upperLeft[1]],
+                [upperLeft[0], upperLeft[1]],
+                [upperLeft[0], minY]
+              ]];
+              break;
+            }
+            case 'southwest': {
+              // Anchor: bottom-left [minX, minY]
+              const upperRight = [
+                minX + (maxX - minX) * progress,
+                minY + (maxY - minY) * progress
+              ];
+              pestPolygon = [[
+                [minX, minY],
+                [upperRight[0], minY],
+                [upperRight[0], upperRight[1]],
+                [minX, upperRight[1]],
+                [minX, minY]
+              ]];
+              break;
+            }
+          }
+        
+          // Update the pest-spread layer with a polygon geometry
+          this.map.getSource('pest-spread').setData({
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: pestPolygon
+            }
+          });
+        },
+
+        replaySimulation() {
+            if (!this.simulationComplete || !this.simulationData.length) return;
+            
+            this.isReplaying = true;
+            let frame = 0;
+            
+            const animate = () => {
+                if (!this.isReplaying) return;
+                
+                this.playheadPosition = (frame / (this.simulationData.length - 1)) * 100;
+                this.handlePlayheadChange({ target: { value: this.playheadPosition } });
+                
+                frame++;
+                if (frame < this.simulationData.length) {
+                    setTimeout(() => requestAnimationFrame(animate), 50); // Control replay speed
+                } else {
+                    this.isReplaying = false;
+                }
+            };
+            
+            animate();
+        },
+
+        stopReplay() {
+            this.isReplaying = false;
         },
 
         resetSimulation() {
@@ -551,6 +924,58 @@ createApp({
                 avgDetectionsPerDay: 0,
                 detectionsByWeek: []
             };
-        }
+
+            this.firstDetection = {
+                date: null,
+                coordinates: null
+            };
+            
+            // Reset first detection marker
+            this.map.getSource('first-detection').setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+
+            this.playheadPosition = 0;
+            this.isReplaying = false;
+            this.simulationData = [];
+        },
+
+        // Helper function to calculate distance between two points
+        distance(point1, point2) {
+            // Add safety checks for the distance calculation
+            if (!point1 || !point2) {
+                console.warn('Invalid points for distance calculation:', { point1, point2 });
+                return 0;
+            }
+            const [x1, y1] = point1;
+            const [x2, y2] = point2;
+            if (typeof x1 !== 'number' || typeof y1 !== 'number' || 
+                typeof x2 !== 'number' || typeof y2 !== 'number') {
+                console.warn('Invalid coordinates:', { point1, point2 });
+                return 0;
+            }
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        },
+
+        // updatePestSpread() {
+        //     // Extract just the pest spread visualization logic from updateDisplay
+        //     const spreadFeatures = this.boundary.features.map(feature => ({
+        //         ...feature,
+        //         properties: {
+        //             ...feature.properties,
+        //             // Simplified pest progress calculation based on distance from origin
+        //             pestProgress: Math.max(0, Math.min(1, 
+        //                 1 - (this.distance(feature.geometry.coordinates[0][0], this.originPoint) 
+        //                     / (this.spreadRate * this.pestProgress))
+        //             ))
+        //         }
+        //     }));
+
+        //     this.map.getSource('boundary').setData({
+        //         type: 'FeatureCollection',
+        //         features: spreadFeatures
+        //     });
+        // },
     }
 }).mount('#app') 
