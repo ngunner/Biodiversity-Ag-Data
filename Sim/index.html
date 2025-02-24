@@ -90,7 +90,7 @@
 
             <!-- Add this in the parameters section -->
             <div class="control-group">
-                <label>Number of Iterations</label>
+                <label>Number of Iterations<br><small>(Less than 5 may cause errors)</small></label>
                 <input 
                     type="number" 
                     v-model.number="numberOfIterations" 
@@ -98,7 +98,6 @@
                     max="100"
                     :disabled="isPlaying"
                 >
-                <span>{{ numberOfIterations }}</span>
             </div>
 
             <!-- Control buttons -->

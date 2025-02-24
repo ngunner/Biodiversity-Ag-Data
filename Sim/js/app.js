@@ -230,8 +230,21 @@ createApp({
                     this.currentDate = new Date(this.startDate);
                     this.pestProgress = 0;
                     this.accumulatedDetections.clear();
+                    // Reset first detection data for each iteration
+                    this.firstDetection = {
+                        date: null,
+                        coordinates: null
+                    };
+                    this.stats.daysToFirstDetection = null;
                     
-                    // Generate observations with a small delay to allow UI updates
+                    // Clear first detection marker
+                    if (this.map && this.map.getSource('first-detection')) {
+                        this.map.getSource('first-detection').setData({
+                            type: 'FeatureCollection',
+                            features: []
+                        });
+                    }
+                    
                     await new Promise(resolve => setTimeout(resolve, 0));
                     this.generateObservations();
 
@@ -1027,9 +1040,26 @@ createApp({
                 const values = data.filter(v => v !== null);
                 const min = Math.min(...values);
                 const max = Math.max(...values);
-                
-                // Force exactly 10 bins of equal width
-                const binCount = 10;
+
+                // Calculate optimal bin width using Freedman-Diaconis rule
+                const getOptimalBinCount = (data) => {
+                    // Sort the data to calculate IQR
+                    const sorted = [...data].sort((a, b) => a - b);
+                    const q1 = sorted[Math.floor(sorted.length * 0.25)];
+                    const q3 = sorted[Math.floor(sorted.length * 0.75)];
+                    const iqr = q3 - q1;
+                    
+                    // Freedman-Diaconis rule: bin width = 2 * IQR * n^(-1/3)
+                    const binWidth = 2 * iqr * Math.pow(data.length, -1/3);
+                    
+                    // Calculate number of bins
+                    const binCount = Math.ceil((max - min) / binWidth);
+                    
+                    // Ensure reasonable limits (between 5 and 20 bins)
+                    return Math.max(5, Math.min(20, binCount));
+                };
+
+                const binCount = getOptimalBinCount(values);
                 const binWidth = (max - min) / binCount;
                 const bins = Array(binCount).fill(0);
                 const binLabels = Array(binCount).fill(0);
