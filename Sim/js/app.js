@@ -40,6 +40,15 @@ createApp({
             simulationData: [], // Will store state at each timestep
             spreadRate: 100, // Added for the new pest spread calculation
             originPoint: [0, 0], // Added for the new pest spread calculation
+            numberOfIterations: 1,
+            currentIteration: 0,
+            allRunStats: [], // Array to store stats from each run
+            meanStats: {
+                detectionRate: 0,
+                daysToFirstDetection: 0,
+                totalDetections: 0
+            },
+            charts: {}, // Will hold Chart.js instances
         }
     },
 
@@ -201,40 +210,98 @@ createApp({
             }
         },
 
-        startSimulation() {
+        async startSimulation() {
             if (!this.boundary) {
                 alert('Please load a boundary file first');
                 return;
             }
 
-            // Validate origin point
-            if (!this.originPoint || !Array.isArray(this.originPoint) || this.originPoint.length !== 2) {
-                console.error('Invalid origin point:', this.originPoint);
-                alert('Invalid origin point configuration');
-                return;
-            }
-
             this.isPlaying = true;
-            this.currentDate = new Date(this.startDate);
-            this.pestProgress = 0;
-            this.accumulatedDetections.clear();
-            this.simulationComplete = false;
-            this.showStats = false;
-            this.playheadPosition = 100;
-            this.simulationData = [];
-            this.firstDetection = {
-                date: null,
-                coordinates: null
-            };
-            
-            // Show loading spinner
-            this.isLoading = true;
-            
-            setTimeout(() => {
-                this.generateObservations();
-                this.isLoading = false;
-                this.animate();
-            }, 0);
+            this.allRunStats = [];
+            this.currentIteration = 0;
+            this.isLoading = true; // Show loading spinner
+
+            try {
+                // Run multiple iterations
+                while (this.currentIteration < this.numberOfIterations) {
+                    this.currentIteration++;
+                    
+                    // Reset for this iteration
+                    this.currentDate = new Date(this.startDate);
+                    this.pestProgress = 0;
+                    this.accumulatedDetections.clear();
+                    
+                    // Generate observations with a small delay to allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    this.generateObservations();
+
+                    // Run this iteration
+                    await this.runIteration();
+
+                    // Store stats for this iteration
+                    this.allRunStats.push({
+                        detectionRate: parseFloat(this.stats.detectionRate),
+                        daysToFirstDetection: this.stats.daysToFirstDetection,
+                        totalDetections: this.stats.totalDetections
+                    });
+
+                    // Only calculate means and update histograms if we have multiple iterations
+                    if (this.numberOfIterations > 1) {
+                        this.updateMeanStats();
+                        if (this.currentIteration === this.numberOfIterations) {
+                            this.updateHistograms();
+                        }
+                    }
+                }
+                
+                // Final iteration is complete
+                this.simulationComplete = true;
+                this.showStats = true;
+            } finally {
+                this.isLoading = false; // Hide loading spinner
+            }
+        },
+
+        async runIteration() {
+            return new Promise(resolve => {
+                // Clear previous simulation data if this is the first iteration
+                if (this.currentIteration === 1) {
+                    this.simulationData = [];
+                }
+
+                const animate = () => {
+                    if (!this.isPlaying) return;
+
+                    this.pestProgress = (this.currentDate - this.startDate) / (this.endDate - this.startDate);
+                    this.updateDisplay();
+
+                    // Store state for replay (only on the final iteration)
+                    if (this.currentIteration === this.numberOfIterations) {
+                        this.simulationData.push({
+                            date: new Date(this.currentDate),
+                            pestProgress: this.pestProgress,
+                            observations: this.observations.filter(obs => 
+                                obs.date.toDateString() === this.currentDate.toDateString()
+                            ),
+                            detections: Array.from(this.accumulatedDetections).map(coordStr => JSON.parse(coordStr)),
+                            firstDetection: this.firstDetection ? { ...this.firstDetection } : null
+                        });
+                    }
+
+                    this.currentDate = new Date(this.currentDate.getTime() + 24 * 60 * 60 * 1000);
+
+                    if (this.currentDate <= this.endDate) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        // Reset playhead position at the end of simulation
+                        if (this.currentIteration === this.numberOfIterations) {
+                            this.playheadPosition = 100;
+                        }
+                        resolve();
+                    }
+                };
+                animate();
+            });
         },
 
         generateObservations() {
@@ -938,5 +1005,102 @@ createApp({
             }
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         },
+
+        updateMeanStats() {
+            const stats = this.allRunStats;
+            this.meanStats = {
+                detectionRate: stats.reduce((sum, s) => sum + s.detectionRate, 0) / stats.length,
+                daysToFirstDetection: stats.reduce((sum, s) => sum + (s.daysToFirstDetection || 0), 0) / stats.length,
+                totalDetections: stats.reduce((sum, s) => sum + s.totalDetections, 0) / stats.length
+            };
+        },
+
+        updateHistograms() {
+            // Create histograms using Chart.js
+            const createHistogram = (canvasId, data, label) => {
+                const ctx = document.getElementById(canvasId);
+                if (this.charts[canvasId]) {
+                    this.charts[canvasId].destroy();
+                }
+
+                // Calculate histogram bins
+                const values = data.filter(v => v !== null);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                
+                // Force exactly 10 bins of equal width
+                const binCount = 10;
+                const binWidth = (max - min) / binCount;
+                const bins = Array(binCount).fill(0);
+                const binLabels = Array(binCount).fill(0);
+
+                // Create bin labels and initialize bins
+                for (let i = 0; i < binCount; i++) {
+                    const binStart = min + (i * binWidth);
+                    const binEnd = binStart + binWidth;
+                    binLabels[i] = `${binStart.toFixed(1)} - ${binEnd.toFixed(1)}`;
+                }
+
+                // Fill the bins
+                values.forEach(value => {
+                    if (value === max) {
+                        // Handle edge case: put maximum value in last bin
+                        bins[binCount - 1]++;
+                    } else {
+                        const binIndex = Math.floor((value - min) / binWidth);
+                        bins[binIndex]++;
+                    }
+                });
+
+                this.charts[canvasId] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: binLabels,
+                        datasets: [{
+                            label: label,
+                            data: bins,
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Frequency'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: label
+                            }
+                        }
+                    }
+                });
+            };
+
+            createHistogram('detectionRateHist', 
+                this.allRunStats.map(s => s.detectionRate), 
+                'Detection Rate (%)');
+            createHistogram('daysToFirstDetectionHist', 
+                this.allRunStats.map(s => s.daysToFirstDetection), 
+                'Days to First Detection');
+            createHistogram('totalDetectionsHist', 
+                this.allRunStats.map(s => s.totalDetections), 
+                'Total Detections');
+        }
     }
 }).mount('#app') 
