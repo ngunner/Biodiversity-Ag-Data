@@ -35,7 +35,7 @@ createApp({
                 date: null,
                 coordinates: null
             },
-            playheadPosition: 0, // 0 to 100
+            playheadPosition: 100, // 0 to 100
             isReplaying: false,
             simulationData: [], // Will store state at each timestep
             spreadRate: 100, // Added for the new pest spread calculation
@@ -220,7 +220,7 @@ createApp({
             this.accumulatedDetections.clear();
             this.simulationComplete = false;
             this.showStats = false;
-            this.playheadPosition = 0;
+            this.playheadPosition = 100;
             this.simulationData = [];
             this.firstDetection = {
                 date: null,
@@ -697,26 +697,6 @@ createApp({
             this.updatePestSpread(state.pestProgress);
         },
 
-        // updatePestSpread(progress) {
-        //     if (!this.map || !this.map.getSource('pest-spread')) return;
-            
-        //     const point = {
-        //         type: 'Feature',
-        //         geometry: {
-        //             type: 'Point',
-        //             coordinates: this.originPoint
-        //         },
-        //         properties: {
-        //             radius: this.spreadRate * progress
-        //         }
-        //     };
-
-        //     this.map.getSource('pest-spread').setData({
-        //         type: 'FeatureCollection',
-        //         features: [point]
-        //     });
-        // },
-
         updatePestSpread(progress) {
           // If no progress is passed in, default to the current this.pestProgress
           if (progress === undefined) {
@@ -855,7 +835,8 @@ createApp({
             if (!this.simulationComplete || !this.simulationData.length) return;
             
             this.isReplaying = true;
-            let frame = 0;
+            // Calculate starting frame based on current playhead position
+            let frame = Math.floor((this.simulationData.length - 1) * (this.playheadPosition / 100));
             
             const animate = () => {
                 if (!this.isReplaying) return;
@@ -936,7 +917,7 @@ createApp({
                 features: []
             });
 
-            this.playheadPosition = 0;
+            this.playheadPosition = 100;
             this.isReplaying = false;
             this.simulationData = [];
         },
@@ -957,25 +938,5 @@ createApp({
             }
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         },
-
-        // updatePestSpread() {
-        //     // Extract just the pest spread visualization logic from updateDisplay
-        //     const spreadFeatures = this.boundary.features.map(feature => ({
-        //         ...feature,
-        //         properties: {
-        //             ...feature.properties,
-        //             // Simplified pest progress calculation based on distance from origin
-        //             pestProgress: Math.max(0, Math.min(1, 
-        //                 1 - (this.distance(feature.geometry.coordinates[0][0], this.originPoint) 
-        //                     / (this.spreadRate * this.pestProgress))
-        //             ))
-        //         }
-        //     }));
-
-        //     this.map.getSource('boundary').setData({
-        //         type: 'FeatureCollection',
-        //         features: spreadFeatures
-        //     });
-        // },
     }
 }).mount('#app') 

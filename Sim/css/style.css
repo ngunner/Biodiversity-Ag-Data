@@ -311,9 +311,9 @@ input[type="file"] {
 }
 
 .playhead-controls {
-  position: absolute;
+  position: fixed;
   bottom: 20px;
-  left: 50%;
+  right: 0;
   transform: translateX(-50%);
   background: white;
   padding: 10px;
@@ -334,6 +334,7 @@ input[type="file"] {
   border-radius: 4px;
   background: white;
   cursor: pointer;
+  color: #333;
 }
 
 .playhead-controls button:disabled {
