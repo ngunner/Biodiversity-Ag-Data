@@ -13,20 +13,140 @@ body {
 }
 
 .control-panel {
-    position: absolute;
-    top: 20px;
-    right: 20px;
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
     background: white;
     padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: -2px 0 4px rgba(0,0,0,0.2);
     width: 300px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    z-index: 1500;
+}
+
+.control-panel-open {
+    transform: translateX(0);
 }
 
 .control-panel h2 {
     margin: 0 0 20px 0;
     font-size: 18px;
     color: #333;
+}
+
+.settings-header {
+    position: sticky;
+    top: 0;
+    background: white;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+}
+
+.dismiss-settings {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.dismiss-settings:hover {
+    background-color: #f0f0f0;
+}
+
+.dismiss-settings::before {
+    content: "×";
+    font-size: 24px;
+    color: #666;
+    line-height: 1;
+}
+
+.settings-toggle {
+    position: fixed;
+    right: 20px;
+    top: 20px;
+    background: #4CAF50;
+    z-index: 1000;
+    width: auto;
+    padding: 8px 16px;
+    opacity: 1;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.settings-toggle:hover {
+    background: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Mobile responsiveness for both panels */
+@media (max-width: 768px) {
+    .control-panel,
+    .stats-panel {
+        width: 85%;
+        max-width: 85%;
+        height: 100%;
+        top: 0;
+    }
+
+    .control-panel {
+        right: 0;
+        transform: translateX(100%);
+    }
+
+    .control-panel-open {
+        transform: translateX(0);
+    }
+
+    .stats-panel {
+        left: 0;
+        transform: translateX(-100%);
+    }
+
+    .stats-panel-open {
+        transform: translateX(0);
+    }
+    
+    .dismiss-settings,
+    .dismiss-stats {
+        width: 44px;
+        height: 44px;
+    }
+
+    .settings-toggle,
+    .stats-toggle {
+        padding: 12px 20px;
+        font-size: 16px;
+    }
+
+    /* Adjust toggle button positions for mobile */
+    .settings-toggle {
+        right: 10px;
+        top: 10px;
+    }
+
+    .stats-toggle {
+        left: 10px;
+        top: 10px;
+    }
 }
 
 .control-group {
@@ -140,7 +260,7 @@ input[type="file"] {
     justify-content: center;
     align-items: center;
     gap: 20px;
-    z-index: 1000;
+    z-index: 10000;
 }
 
 .progress-info {
@@ -227,6 +347,7 @@ input[type="file"] {
     transform: translateX(-100%);
     transition: transform 0.3s ease;
     overflow-y: auto;
+    z-index: 1500;
 }
 
 .stats-panel-open {
@@ -240,6 +361,10 @@ input[type="file"] {
     padding-bottom: 15px;
     margin-bottom: 15px;
     border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
 }
 
 .stats-header h3 {
@@ -248,46 +373,65 @@ input[type="file"] {
     color: #333;
 }
 
-.close-stats {
+.dismiss-stats {
     background: none;
     border: none;
-    font-size: 24px;
-    color: #666;
+    padding: 8px;
     cursor: pointer;
-    padding: 0;
-    width: 30px;
-    height: 30px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background-color 0.2s;
 }
 
-.close-stats:hover {
-    color: #333;
-    background: #f5f5f5;
-    border-radius: 50%;
+.dismiss-stats:hover {
+    background-color: #f0f0f0;
+}
+
+.dismiss-stats::before {
+    content: "×";
+    font-size: 24px;
+    color: #666;
+    line-height: 1;
 }
 
 .stats-toggle {
     position: fixed;
     left: 20px;
-    bottom: 20px;
+    top: 20px;
     background: #2196F3;
     z-index: 1000;
     width: auto;
     padding: 8px 16px;
-    opacity: 0; /* Hide initially */
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-}
-
-.stats-toggle.visible {
     opacity: 1;
-    pointer-events: auto;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 .stats-toggle:hover {
     background: #1976D2;
+    transform: translateY(-2px);
+}
+
+/* Mobile responsiveness for stats panel */
+@media (max-width: 768px) {
+    .stats-panel {
+        width: calc(100vw - 41px);
+        max-width: 100%;
+        z-index: 9999;
+    }
+    
+    .dismiss-stats {
+        width: 44px;
+        height: 44px;
+    }
 }
 
 /* Update existing stat-grid styles */

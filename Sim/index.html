@@ -13,8 +13,98 @@
 <body>
     <div id="app">
         <div id="map"></div>
-        <div class="control-panel">
-            <h2>Pest Detection Simulation</h2>
+        
+        <!-- Toggle Buttons -->
+        <button 
+            class="stats-toggle"
+            @click="showStats = !showStats"
+        >
+            {{ showStats ? 'Hide Stats' : 'Show Stats' }}
+        </button>
+
+        <button 
+            class="settings-toggle"
+            @click="showSettings = !showSettings"
+        >
+            {{ showSettings ? 'Hide Settings' : 'Show Settings' }}
+        </button>
+
+        <!-- Stats Panel -->
+        <div class="stats-panel" :class="{ 'stats-panel-open': showStats }">
+            <div class="stats-header">
+                <h3>Simulation Statistics</h3>
+                <button class="dismiss-stats" @click="showStats = false" aria-label="Close statistics panel"></button>
+            </div>
+            <div v-if="observations.length > 0">
+                <!-- Current run stats -->
+                <h4>Current Run</h4>
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <label>Total Observations</label>
+                        <span>{{ stats.totalObservations }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Total Detections</label>
+                        <span>{{ stats.totalDetections }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Detection Rate</label>
+                        <span>{{ stats.detectionRate }}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Pest Area</label>
+                        <span>{{ stats.pestArea }} km²</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Coverage</label>
+                        <span>{{ stats.coveragePercent }} detections/km²</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Days to First Detection</label>
+                        <span>{{ stats.daysToFirstDetection ?? 'N/A' }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Avg. Detections/Day</label>
+                        <span>{{ stats.avgDetectionsPerDay }}</span>
+                    </div>
+                </div>
+
+                <!-- Multiple run stats -->
+                <div v-if="allRunStats.length > 1" class="multi-run-stats">
+                    <h4>Statistics Across {{ numberOfIterations }} Runs</h4>
+                    <div class="stat-item">
+                        <label>Mean Detection Rate</label>
+                        <span>{{ meanStats.detectionRate.toFixed(1) }}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Mean Days to First Detection</label>
+                        <span>{{ meanStats.daysToFirstDetection.toFixed(1) }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <label>Mean Total Detections</label>
+                        <span>{{ meanStats.totalDetections.toFixed(1) }}</span>
+                    </div>
+                    
+                    <!-- Histogram canvases -->
+                    <div class="histogram-container">
+                        <canvas id="detectionRateHist"></canvas>
+                        <canvas id="daysToFirstDetectionHist"></canvas>
+                        <canvas id="totalDetectionsHist"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="control-panel" :class="{ 'control-panel-open': showSettings }">
+            <div class="settings-header">
+                <h2>Pest Detection Simulation</h2>
+                <button 
+                    class="dismiss-settings" 
+                    @click="showSettings = false" 
+                    aria-label="Close settings panel"
+                ></button>
+            </div>
             
             <!-- File upload -->
             <div class="control-group">
@@ -113,93 +203,6 @@
                 >
                     Reset
                 </button>
-                <button @click="showStats = !showStats" class="stats-toggle">
-                    {{ showStats ? 'Hide Stats' : 'Show Stats' }}
-                </button>
-            </div>
-
-            <!-- Add this after the control buttons -->
-            <div class="stats-panel" :class="{ 'stats-panel-open': showStats }">
-                <div class="stats-header">
-                    <h3>Simulation Statistics</h3>
-                </div>
-                <div v-if="observations.length > 0">
-                    <!-- Current run stats -->
-                    <h4>Current Run</h4>
-                    <div class="stat-grid">
-                        <div class="stat-item">
-                            <label>Total Observations</label>
-                            <span>{{ stats.totalObservations }}</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Total Detections</label>
-                            <span>{{ stats.totalDetections }}</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Detection Rate</label>
-                            <span>{{ stats.detectionRate }}%</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Pest Area</label>
-                            <span>{{ stats.pestArea }} km²</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Coverage</label>
-                            <span>{{ stats.coveragePercent }} detections/km²</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Days to First Detection</label>
-                            <span>{{ stats.daysToFirstDetection ?? 'N/A' }}</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Avg. Detections/Day</label>
-                            <span>{{ stats.avgDetectionsPerDay }}</span>
-                        </div>
-                    </div>
-
-                    <!-- Multiple run stats -->
-                    <div v-if="allRunStats.length > 1" class="multi-run-stats">
-                        <h4>Statistics Across {{ numberOfIterations }} Runs</h4>
-                        <div class="stat-item">
-                            <label>Mean Detection Rate</label>
-                            <span>{{ meanStats.detectionRate.toFixed(1) }}%</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Mean Days to First Detection</label>
-                            <span>{{ meanStats.daysToFirstDetection.toFixed(1) }}</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Mean Total Detections</label>
-                            <span>{{ meanStats.totalDetections.toFixed(1) }}</span>
-                        </div>
-                        
-                        <!-- Histogram canvases -->
-                        <div class="histogram-container">
-                            <canvas id="detectionRateHist"></canvas>
-                            <canvas id="daysToFirstDetectionHist"></canvas>
-                            <canvas id="totalDetectionsHist"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div v-if="simulationComplete && simulationData.length > 0" class="playhead-controls">
-                <button @click="replaySimulation" :disabled="isReplaying">
-                    Play
-                </button>
-                <button @click="stopReplay" :disabled="!isReplaying">
-                    Stop
-                </button>
-                <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    step="0.1"
-                    :value="playheadPosition"
-                    @input="handlePlayheadChange($event)"
-                    :disabled="isReplaying"
-                >
-                <!-- <span>{{ currentDate.toLocaleDateString() }}</span> -->
             </div>
         </div>
         <div v-if="isLoading" class="loading-spinner">

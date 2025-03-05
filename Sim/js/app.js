@@ -6,6 +6,7 @@ createApp({
             map: null,
             boundary: null,
             isPlaying: false,
+            showSettings: true,
             // Simulation parameters
             observationDensity: 1,    // observations per 100km² per month
             detectionRate: 20,        // % chance of detecting pest if present
