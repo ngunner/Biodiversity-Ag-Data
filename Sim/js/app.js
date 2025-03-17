@@ -260,7 +260,8 @@ createApp({
                     this.allRunStats.push({
                         detectionRate: parseFloat(this.stats.detectionRate),
                         daysToFirstDetection: this.stats.daysToFirstDetection,
-                        totalDetections: this.stats.totalDetections
+                        totalDetections: this.stats.totalDetections,
+                        coveragePercent: parseFloat(this.stats.coveragePercent)
                     });
 
                     // Only calculate means and update histograms if we have multiple iterations
@@ -1038,12 +1039,23 @@ createApp({
             // Create histograms using Chart.js
             const createHistogram = (canvasId, data, label) => {
                 const ctx = document.getElementById(canvasId);
+                if (!ctx) {
+                    console.error(`Canvas element ${canvasId} not found`);
+                    return;
+                }
+
                 if (this.charts[canvasId]) {
                     this.charts[canvasId].destroy();
                 }
 
+                // Filter out null/undefined values and ensure we have data
+                const values = data.filter(v => v !== null && v !== undefined);
+                if (values.length === 0) {
+                    console.error(`No valid data for ${canvasId}`);
+                    return;
+                }
+
                 // Calculate histogram bins
-                const values = data.filter(v => v !== null);
                 const min = Math.min(...values);
                 const max = Math.max(...values);
 
@@ -1128,15 +1140,15 @@ createApp({
                 });
             };
 
-            createHistogram('detectionRateHist', 
-                this.allRunStats.map(s => s.detectionRate), 
-                'Detection Rate (%)');
-            createHistogram('daysToFirstDetectionHist', 
-                this.allRunStats.map(s => s.daysToFirstDetection), 
-                'Days to First Detection');
-            createHistogram('totalDetectionsHist', 
-                this.allRunStats.map(s => s.totalDetections), 
-                'Total Detections');
+            // Only create histograms if we have data
+            if (this.allRunStats.length > 0) {
+                createHistogram('coverageHist', 
+                    this.allRunStats.map(s => s.coveragePercent), 
+                    'Coverage (detections/km²)');
+                createHistogram('daysToFirstDetectionHist', 
+                    this.allRunStats.map(s => s.daysToFirstDetection), 
+                    'Days to First Detection');
+            }
         }
     }
 }).mount('#app') 
