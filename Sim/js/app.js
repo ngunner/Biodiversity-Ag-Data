@@ -31,7 +31,7 @@ createApp({
             },
             showStats: false,  // Controls statistics panel visibility
             simulationComplete: false,  // Add this new property
-            invasionDirection: 'west', // Add this new property
+            invasionDirection: 'south', // Add this new property
             firstDetection: {
                 date: null,
                 coordinates: null
@@ -57,7 +57,7 @@ createApp({
         // Initialize map
         this.map = new maplibregl.Map({
             container: 'map',
-            style: 'https://demotiles.maplibre.org/style.json',
+            style: 'https://tiles.stadiamaps.com/styles/osm_bright.json',
             center: [-75.6, 42.9],  // NY state center
             zoom: 6
         });
@@ -66,7 +66,8 @@ createApp({
             await this.initializeLayers();
             // Load default NY boundary
             try {
-                const response = await fetch('./data/ny_state.geojson');
+                // const response = await fetch('./data/ny_state.geojson');
+                const response = await fetch('./data/slf_risk.geojson');
                 const geojson = await response.json();
                 this.loadBoundaryData(geojson);
             } catch (error) {
@@ -217,6 +218,9 @@ createApp({
                 return;
             }
 
+            // Reset first
+            this.resetSimulation();
+
             this.isPlaying = true;
             this.allRunStats = [];
             this.currentIteration = 0;
@@ -270,6 +274,7 @@ createApp({
                 
                 // Final iteration is complete
                 this.simulationComplete = true;
+                this.isPlaying = false;
                 this.showStats = true;
             } finally {
                 this.isLoading = false; // Hide loading spinner
@@ -690,8 +695,8 @@ createApp({
                 [bbox[0], bbox[3]],
                 [bbox[0], bbox[1]]
             ]]);
-            const pestArea = turf.area(pestPolygon) / 1000000; // km²
-
+            // const pestArea = turf.area(pestPolygon) / 1000000; // km²
+            const pestArea = turf.area(this.boundary) / 1000000; // km²
             // Count observations in pest-affected area
             const observationsInPestArea = this.observations.filter(obs => 
                 obs.date <= this.currentDate && 

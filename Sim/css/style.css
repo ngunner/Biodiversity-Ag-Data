@@ -60,12 +60,12 @@ body {
     height: 32px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: right;
     transition: background-color 0.2s;
 }
 
 .dismiss-settings:hover {
-    background-color: #f0f0f0;
+    background-color: #fff;
 }
 
 .dismiss-settings::before {
@@ -383,12 +383,12 @@ input[type="file"] {
     height: 32px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: right;
     transition: background-color 0.2s;
 }
 
 .dismiss-stats:hover {
-    background-color: #f0f0f0;
+    background-color: #fff;
 }
 
 .dismiss-stats::before {

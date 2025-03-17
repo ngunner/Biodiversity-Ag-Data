@@ -48,7 +48,7 @@
                         <span>{{ stats.totalDetections }}</span>
                     </div>
                     <div class="stat-item">
-                        <label>Detection Rate</label>
+                        <label>Total Detection Rate</label>
                         <span>{{ stats.detectionRate }}%</span>
                     </div>
                     <div class="stat-item">
@@ -130,7 +130,7 @@
             </div>
 
             <div class="control-group">
-                <label>Detection Rate (%)</label>
+                <label>Taxonomic Likelihood (%)</label>
                 <input 
                     type="range" 
                     v-model.number="detectionRate" 
@@ -195,7 +195,7 @@
                 <button 
                     @click="isPlaying ? isPlaying = false : startSimulation()"
                 >
-                    {{ isPlaying ? 'Pause' : 'Start' }}
+                    {{ isPlaying ? 'Pause' : (simulationComplete ? 'Start' : 'Start') }}
                 </button>
                 <button 
                     @click="resetSimulation"
