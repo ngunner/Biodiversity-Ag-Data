@@ -57,9 +57,10 @@ createApp({
         // Initialize map
         this.map = new maplibregl.Map({
             container: 'map',
-            style: 'https://tiles.stadiamaps.com/styles/osm_bright.json',
+            style: 'mapbox://styles/mapbox/satellite-v9',
             center: [-75.6, 42.9],  // NY state center
-            zoom: 6
+            zoom: 6,
+            accessToken: 'pk.eyJ1IjoibnJnNDIiLCJhIjoiY205OHJmYWNjMDY0ajJrb2JqazQ5cWw4NiJ9.GDAeRs3uwE8Y-WaqLyFomw'
         });
 
         this.map.on('load', async () => {
