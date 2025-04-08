@@ -55,30 +55,9 @@ createApp({
 
     mounted() {
         // Initialize map
-        this.map = new maplibregl.Map({
+        this.map = new mapboxgl.Map({
             container: 'map',
-            style: {
-                version: 8,
-                sources: {
-                    'satellite': {
-                        type: 'raster',
-                        tiles: [
-                            'https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=get_your_own_D6rA4zTHduk6KOKTXzGB'
-                        ],
-                        tileSize: 256,
-                        attribution: '© MapTiler © OpenStreetMap contributors'
-                    }
-                },
-                layers: [
-                    {
-                        id: 'satellite',
-                        type: 'raster',
-                        source: 'satellite',
-                        minzoom: 0,
-                        maxzoom: 22
-                    }
-                ]
-            },
+            style: 'mapbox://styles/mapbox/satellite-v9',
             center: [-75.6, 42.9],  // NY state center
             zoom: 6,
             accessToken: 'pk.eyJ1IjoibnJnNDIiLCJhIjoiY205OHJmYWNjMDY0ajJrb2JqazQ5cWw4NiJ9.GDAeRs3uwE8Y-WaqLyFomw'
