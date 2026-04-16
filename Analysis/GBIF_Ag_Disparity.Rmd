@@ -215,7 +215,10 @@ ggplot(ny_counties_data) +
        y = NULL) +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
-    legend.position = "right"
+    legend.position = "right",
+    axis.text = element_blank(),       # Remove axis text
+    axis.ticks = element_blank(),      # Remove axis ticks
+    panel.grid = element_blank()       # Remove background grid lines
   )
 
 # ---- INTERACTIVE MAP ----
@@ -297,7 +300,9 @@ bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, -GBIF_Agricultural
        caption = "") +
   theme(
     axis.text.y = element_text(size = 10),  # Increase text size for readability
-    legend.position = "none"  # Remove legend if not needed
+    legend.position = "none",  # Remove legend if not needed
+    panel.grid.major = element_blank(),     # Remove major gridlines
+    panel.grid.minor = element_blank() 
   )
 
 # Display the plot
@@ -400,7 +405,10 @@ ggplot(ny_counties_data) +
        y = NULL) +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
-    legend.position = "right"
+    legend.position = "right",
+    axis.text = element_blank(),       # Remove axis text
+    axis.ticks = element_blank(),      # Remove axis ticks
+    panel.grid = element_blank()       # Remove background grid lines
   )
 
 # ---- INTERACTIVE MAP ----
@@ -508,11 +516,13 @@ bar_plot <- ggplot(data_filtered, aes(x = reorder(COUNTYNAME, Observational_Cove
   coord_flip() +
   theme_minimal() +
   labs(title = "",
-       x = "County", y = "Coverage",
+       x = "", y = "",
        caption = "") +
   theme(
     axis.text.y = element_text(size = 10),  # Increase text size for readability
-    legend.position = "none" # Move legend to top
+    legend.position = "none",  # Remove legend if not needed
+    panel.grid.major = element_blank(),     # Remove major gridlines
+    panel.grid.minor = element_blank() 
   )
 
 # Display the plot

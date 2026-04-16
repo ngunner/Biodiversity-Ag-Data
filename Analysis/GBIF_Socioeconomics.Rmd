@@ -47,6 +47,11 @@ ggplot(data_filtered, aes(x = education_levels, y = Observational_Coverage)) +
        x = "College Completion Rate (%)",
        y = "Observational Coverage") +
   theme_minimal()
+
+model_edu <- lm(Observational_Coverage ~ education_levels, data = data_filtered)
+summary(model_edu)$r.squared  # R²
+summary(model_edu)$coefficients[2, 4]  # p-value
+summary(model_edu)$coefficients[2, 1]  # slope
 ```
 
 # 2022 Unemployment Rate
@@ -93,6 +98,11 @@ ggplot(data_filtered, aes(x = unemployment_rate, y = Observational_Coverage)) +
        x = "Unemployment Rate (%)",
        y = "Observational Coverage") +
   theme_minimal()
+
+model_unemp <- lm(Observational_Coverage ~ unemployment_rate, data = data_filtered)
+summary(model_unemp)$r.squared
+summary(model_unemp)$coefficients[2, 4]
+summary(model_unemp)$coefficients[2, 1]
 ```
 
 # 2021 Median Household Income
@@ -139,6 +149,11 @@ ggplot(data_filtered, aes(x = median_household_income, y = Observational_Coverag
        x = "Median Household Income",
        y = "Observational Coverage") +
   theme_minimal()
+
+model_income <- lm(Observational_Coverage ~ median_household_income, data = data_filtered)
+summary(model_income)$r.squared
+summary(model_income)$coefficients[2, 4]
+summary(model_income)$coefficients[2, 1]
 ```
 
 # 2021 Poverty Rate
@@ -185,6 +200,11 @@ ggplot(data_filtered, aes(x = poverty_rate, y = Observational_Coverage)) +
        x = "Poverty Rate (%)",
        y = "Observational Coverage") +
   theme_minimal()
+
+model_poverty <- lm(Observational_Coverage ~ poverty_rate, data = data_filtered)
+summary(model_poverty)$r.squared
+summary(model_poverty)$coefficients[2, 4]
+summary(model_poverty)$coefficients[2, 1]
 ```
 
 # 2023 Population Density
@@ -229,8 +249,17 @@ ggplot(data_filtered, aes(x = population_density, y = Observational_Coverage)) +
                                           y = Observational_Coverage, 
                                           label = !!sym(county_column_name)), 
                   size = 3.5, color = "red", max.overlaps = 10) +
+  scale_x_log10() +  # << Log transform axis
   labs(title = "",
-       x = "Population Density (People / km2)",
+       x = "Population Density (People/km², log scale)",
        y = "Observational Coverage") +
   theme_minimal()
+
+data_filtered <- data_filtered %>%
+  mutate(log_pop_density = log10(X2023.Population.Density.km2 + 1))
+
+model_density <- lm(Observational_Coverage ~ log_pop_density, data = data_filtered)
+summary(model_density)$r.squared
+summary(model_density)$coefficients[2, 4]
+summary(model_density)$coefficients[2, 1]
 ```
